@@ -4,42 +4,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Xanadu Tennis · Recommender (Smart v2.6)</title>
+  <title>Xanadu Tennis · Recommender (Smart v2.8)</title>
   <style>
-    :root{
-      --bg:#ffffff; --text:#1f2937; --muted:#6b7280; --card:#ffffff; --line:#e5e7eb;
-      --accent:#f97316; /* orange */
-      --accent2:#0f766e; /* deep green */
-      --soft:#f9fafb; /* light panel */
-    }
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    body{margin:0;background:#fff;color:#1f2937;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
     .wrap{min-height:100vh;display:flex;align-items:flex-start;justify-content:center}
     .stage{width:100%;max-width:980px;margin:72px auto 32px;padding:0 16px}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 6px 20px #0000000d}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px;box-shadow:0 6px 20px #0000000d}
     h1{margin:0 0 12px;font-size:22px}
     .q{font-weight:700;margin:8px 0 6px}
     .choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:10px 0}
-    .opt{padding:12px;border-radius:12px;border:1px solid var(--line);background:#fff;cursor:pointer;text-align:center}
-    .opt.selected{outline:2px solid var(--accent)}
-    .muted{color:var(--muted)}
-    .hr{height:1px;background:var(--line);margin:14px 0}
+    .opt{padding:12px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;text-align:center}
+    .opt:hover{background:#f9fafb}
+    .hr{height:1px;background:#e5e7eb;margin:14px 0}
     table{width:100%;border-collapse:collapse;margin:8px 0}
-    th,td{border:1px solid var(--line);padding:8px;text-align:left}
-    th{background:var(--soft)}
+    th,td{border:1px solid #e5e7eb;padding:8px;text-align:left}
+    th{background:#f9fafb}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
     .footer{display:flex;gap:10px;justify-content:space-between;margin-top:14px}
-    .btn{border:none;border-radius:12px;padding:10px 12px;background:var(--accent);color:#fff;cursor:pointer}
-    .btn.alt{background:var(--accent2)}
-    .btn.ghost{background:#fff;color:var(--text);border:1px solid var(--line)}
-    .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--soft);color:var(--muted);font-size:12px;margin-right:6px}
+    .btn{border:none;border-radius:12px;padding:10px 12px;background:#f97316;color:#fff;cursor:pointer}
+    .btn.alt{background:#0f766e}
+    .btn.ghost{background:#fff;color:#1f2937;border:1px solid #e5e7eb}
     .recgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
-    .panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:12px}
-    .stickybar{position:sticky;top:0;z-index:10;background:rgba(255,255,255,0.98);backdrop-filter:saturate(1.2) blur(6px);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
+    .panel{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:12px}
+    .stickybar{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
     .title{font-weight:700}
-    input,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+    input,textarea{width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff}
     textarea{min-height:88px}
-    label{font-size:14px;color:var(--muted)}
+    label{font-size:14px;color:#6b7280}
+    .muted{color:#6b7280}
   </style>
 </head>
 <body>
@@ -51,16 +43,23 @@
   </div>
   <div class="wrap">
     <div class="stage">
-      <div class="card" id="app"></div>
+      <div class="card" id="app">Loading...</div>
     </div>
   </div>
 
 <script>
-// ===== i18n（选择后全站单语）
-const STR = {
+// ===== Runtime error box to avoid blank page
+window.onerror = function(message, source, lineno, colno){
+  var box = document.getElementById('app');
+  box.innerHTML = '<div class="card" style="background:#fff7ed;border:1px solid #fed7aa">'+
+                  '<b>Runtime error</b><br>'+message+'<br>'+source+':'+lineno+':'+colno+
+                  '</div>';
+};
+
+// ===== i18n
+var STR = {
   zh:{
-    title:'课程推荐（智能分档）',
-    lang:'请选择语言', zh:'中文', en:'English',
+    title:'课程推荐（智能分档）', lang:'请选择语言', zh:'中文', en:'English',
     audience:'请选择报名对象', adult:'成人 (14+)', child:'儿童 U14',
     a_level:'请选择成人当前水平', zero:'零基础', basic:'有一定基础', inter:'能对打/发球', adv:'能比赛',
     k_mode:'请选择儿童课程模式', flex:'短期 Flex', longterm:'长期 固定周课',
@@ -69,18 +68,16 @@ const STR = {
     sched:'时间偏好', wd:'工作日白天', we:'工作日晚间', wk:'周末', flex2:'都可以',
     freq:'每周计划上课频率', f1:'1×/周', f2:'2×/周', f3:'3×+/周',
     hours:'请选择课时/学期', h10:'10小时', h15:'15小时', t25:'半年(25周)', t50:'一年(50周)',
-    rec:'为您生成的推荐', main:'最匹配', alt:'其他可选', up:'进阶升级',
-    tip_peak:'高峰期多人班更易排期且人均更省', tip_group:'自组/拼班可更快开班',
+    rec:'为您生成的推荐', main:'最匹配', alt:'其他可选',
     price_all:'完整价目表',
     adult_zero:'成人 · 零基础（红球场）', adult_basic:'成人 · 进阶专项（半场）', adult_full:'成人 · 定制训练（全场）',
     kid_flex:'U14 · 短期 Flex', kid_lt:'U14 · 长期固定（半年/一年）',
     contact:'请留下联系方式，我们将在 24 小时内联系您完成报课',
     name:'姓名', phone:'手机号', email:'邮箱', wechat:'微信号(可选)', notes:'备注(可填年龄/可用时间)', submit:'提交', submitted:'已提交！我们会在 24 小时内联系您完成报课。',
-    back:'上一步', restart:'重新开始'
+    restart:'重新开始'
   },
   en:{
-    title:'Course Recommender (Smart)',
-    lang:'Choose your language', zh:'中文', en:'English',
+    title:'Course Recommender (Smart)', lang:'Choose your language', zh:'中文', en:'English',
     audience:'Who is this for?', adult:'Adult (14+)', child:'Child (U14)',
     a_level:'Select your current level', zero:'True beginner', basic:'Some basics', inter:'Can rally/serve', adv:'Match-ready',
     k_mode:'Select course mode', flex:'Short-term Flex', longterm:'Long-term weekly',
@@ -89,322 +86,105 @@ const STR = {
     sched:'Schedule preference', wd:'Weekday daytime', we:'Weekday evening', wk:'Weekend', flex2:'Flexible',
     freq:'Sessions per week', f1:'1×/week', f2:'2×/week', f3:'3×+/week',
     hours:'Choose hours/term', h10:'10 hours', h15:'15 hours', t25:'Half-year (25 weeks)', t50:'Full-year (50 weeks)',
-    rec:'Your recommendations', main:'Best match', alt:'Other options', up:'Upgrade',
-    tip_peak:'During peak hours, group classes schedule faster and cost less per person', tip_group:'Self-organized or matched groups start sooner',
+    rec:'Your recommendations', main:'Best match', alt:'Other options',
     price_all:'Full Price List',
     adult_zero:'Adults · True Beginner (Red court)', adult_basic:'Adults · Skill Focus (Half court)', adult_full:'Adults · Custom (Full court)',
     kid_flex:'U14 · Short-term Flex', kid_lt:'U14 · Long-term (Half/Full year)',
     contact:'Leave your contact. We will reach out within 24 hours to complete your registration.',
     name:'Full Name', phone:'Phone', email:'Email', wechat:'WeChat (optional)', notes:'Notes (availability, age, etc.)', submit:'Submit', submitted:'Submitted! We will contact you within 24 hours to complete your registration.',
-    back:'Back', restart:'Restart'
+    restart:'Restart'
   }
 };
 
-// ===== 价目（原始中文标注；英文界面时自动本地化为纯英文）
-const PRICE = {
-  adult_zero:[
-    ['1v1 10hr','$800/人','试课$100'],
-    ['1v1 20hr','$1550/人','95折'],
-    ['1v2 10hr','$1000/共','试课$140'],
-    ['1v2 20hr','$1900/共',''],
-    ['1v3 15hr','$1500/共','试课$240'],
-    ['1v4 15hr','$1800/共','试课$280']
-  ],
-  adult_basic:[
-    ['1v1 10hr','$900/人','试课$110'],
-    ['1v1 20hr','$1710/人',''],
-    ['1v2 10hr','$1250/共','试课$150'],
-    ['1v2 20hr','$2375/共',''],
-    ['1v3 15hr','$1500/共','试课$240'],
-    ['1v4 15hr','$1800/共','试课$280']
-  ],
-  adult_full:[
-    ['1v1 10hr','$1300/人','试课$140'],
-    ['1v1 20hr','$2470/人',''],
-    ['1v2 10hr','$1500/共','试课$160'],
-    ['1v2 20hr','$2850/共',''],
-    ['1v3 15hr','$2400/共','试课$270'],
-    ['1v4 15hr','$2800/共','试课$320']
-  ],
-  kid_flex:[
-    ['1v1 10hr','$900/人','试课$100'],
-    ['1v2 10hr','$1250/共','试课$140'],
-    ['1v3 15hr','$500/人','试课$240'],
-    ['1v4 15hr','$450/人','试课$280']
-  ],
+// ===== Prices (source in Chinese; auto localized for EN)
+var PRICE = {
+  adult_zero:[['1v1 10hr','$800/人','试课$100'],['1v1 20hr','$1550/人','95折'],['1v2 10hr','$1000/共','试课$140'],['1v2 20hr','$1900/共',''],['1v3 15hr','$1500/共','试课$240'],['1v4 15hr','$1800/共','试课$280']],
+  adult_basic:[['1v1 10hr','$900/人','试课$110'],['1v1 20hr','$1710/人',''],['1v2 10hr','$1250/共','试课$150'],['1v2 20hr','$2375/共',''],['1v3 15hr','$1500/共','试课$240'],['1v4 15hr','$1800/共','试课$280']],
+  adult_full:[['1v1 10hr','$1300/人','试课$140'],['1v1 20hr','$2470/人',''],['1v2 10hr','$1500/共','试课$160'],['1v2 20hr','$2850/共',''],['1v3 15hr','$2400/共','试课$270'],['1v4 15hr','$2800/共','试课$320']],
+  kid_flex:[['1v1 10hr','$900/人','试课$100'],['1v2 10hr','$1250/共','试课$140'],['1v3 15hr','$500/人','试课$240'],['1v4 15hr','$450/人','试课$280']]
+};
+var K_LT = {
+  '1v1':{'1pw':{'25':['$1875','(75/hr)'],'50':['$3600','(72/hr)']},'2pw':{'25':['$3550','(71/hr)'],'50':['$6700','(67/hr)']},'3pw':{'25':['$4875','(65/hr)'],'50':['$9300','(62/hr)']}},
+  '1v2':{'1pw':{'25':['$2375','(95/hr)'],'50':['$4600','(92/hr)']},'2pw':{'25':['$4550','(91/hr)'],'50':['$8700','(87/hr)']},'3pw':{'25':['$6375','(85/hr)'],'50':['$12100','(80.67/hr)']}},
+  '1v3':{'1pw':{'25':['$3000','(120/hr)'],'50':['$5850','(117/hr)']},'2pw':{'25':['$5750','(115/hr)'],'50':['$11000','(110/hr)']},'3pw':{'25':['$8025','(107/hr)'],'50':['$15500','(103.33/hr)']}},
+  '1v4-6':{'1pw':{'25':['$3650','(146/hr)'],'50':['$7150','(143/hr)']},'2pw':{'25':['$7050','(141/hr)'],'50':['$13650','(136.5/hr)']},'3pw':{'25':['$10050','(134/hr)'],'50':['$19500','(130/hr)']}}
 };
 
-const K_LT = {
-  '1v1':{
-    '1pw':{'25':['$1875','(75/hr)'],'50':['$3600','(72/hr)']},
-    '2pw':{'25':['$3550','(71/hr)'],'50':['$6700','(67/hr)']},
-    '3pw':{'25':['$4875','(65/hr)'],'50':['$9300','(62/hr)']},
-  },
-  '1v2':{
-    '1pw':{'25':['$2375','(95/hr)'],'50':['$4600','(92/hr)']},
-    '2pw':{'25':['$4550','(91/hr)'],'50':['$8700','(87/hr)']},
-    '3pw':{'25':['$6375','(85/hr)'],'50':['$12100','(80.67/hr)']},
-  },
-  '1v3':{
-    '1pw':{'25':['$3000','(120/hr)'],'50':['$5850','(117/hr)']},
-    '2pw':{'25':['$5750','(115/hr)'],'50':['$11000','(110/hr)']},
-    '3pw':{'25':['$8025','(107/hr)'],'50':['$15500','(103.33/hr)']},
-  },
-  '1v4-6':{
-    '1pw':{'25':['$3650','(146/hr)'],'50':['$7150','(143/hr)']},
-    '2pw':{'25':['$7050','(141/hr)'],'50':['$13650','(136.5/hr)']},
-    '3pw':{'25':['$10050','(134/hr)'],'50':['$19500','(130/hr)']},
-  }
-};
-
-// ===== 状态 & DOM
-const PEAK = (s)=> (s==='we' || s==='wk'); // 晚间/周末
-const S = {lang:null, audience:null, a_level:null, k_mode:null, group:null, join:null, sched:null, freq:null, k_group:null, k_join:null, k_sched:null, k_freq:null, k_term:null, submitted:false};
-const app = document.getElementById('app');
+// ===== State
+var S = {lang:null, audience:null, a_level:null, k_mode:null, group:null, join:null, sched:null, freq:null, k_group:null, k_join:null, k_sched:null, k_freq:null, k_term:null, submitted:false};
+var app = document.getElementById('app');
 function t(k){return STR[S.lang||'zh'][k]}
-function restartAll(){ Object.assign(S, {lang:null,audience:null,a_level:null,k_mode:null,group:null,join:null,sched:null,freq:null,k_group:null,k_join:null,k_sched:null,k_freq:null,k_term:null,submitted:false}); render(); }
-function opt(label, on){return `<div class="opt" onclick="(${on})()">${label}</div>`}
+function restartAll(){ S = {lang:null, audience:null, a_level:null, k_mode:null, group:null, join:null, sched:null, freq:null, k_group:null, k_join:null, k_sched:null, k_freq:null, k_term:null, submitted:false}; render(); }
 
-// ===== 本地化 & 表格
-function zh2enCell(cell){
-  let out = cell;
-  out = out.replace('/人',' per person').replace('/共',' per group');
-  out = out.replace('试课','$ Trial ').replace('小时',' hours');
-  out = out.replace('95折','5% off');
-  return out;
-}
-function localizeRows(rows){
-  if((S.lang||'zh')==='zh') return rows;
-  return rows.map(r=>[ zh2enCell(r[0]), zh2enCell(r[1]), zh2enCell(r[2]||'') ]);
-}
-function table(rows){
-  const R = localizeRows(rows);
-  const hdr = (S.lang==='en')? ['Package','Price','Note'] : ['套餐','价格','备注'];
-  return `<table><thead><tr><th>${hdr[0]}</th><th>${hdr[1]}</th><th>${hdr[2]}</th></tr></thead><tbody>
-    ${R.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]||''}</td></tr>`).join('')}
-  </tbody></table>`
-}
-function tableKLT(){
-  const groups=['1v1','1v2','1v3','1v4-6'];
-  const freqs=['1pw','2pw','3pw'];
-  let html='';
-  const thFreq=(S.lang==='en')? 'Freq' : '频次';
-  const th25=(S.lang==='en')? '25 weeks' : '25周';
-  const th50=(S.lang==='en')? '50 weeks' : '50周';
-  groups.forEach(g=>{
-    html += `<div class=card><div class=q>${g}</div><table><thead><tr><th>${thFreq}</th><th>${th25}</th><th>${th50}</th></tr></thead><tbody>`;
-    freqs.forEach(f=>{
-      const c25=K_LT[g][f]['25'].join(' ');
-      const c50=K_LT[g][f]['50'].join(' ');
-      html += `<tr><td>${f}</td><td>${c25}</td><td>${c50}</td></tr>`;
-    });
-    html += `</tbody></table></div>`;
-  });
-  return html;
-}
-
-// ===== 推荐（按场地利用率）
+// === helpers
+function zh2enCell(cell){ var out = cell; out = out.replace('/人',' per person').replace('/共',' per group'); out = out.replace('试课','$ Trial ').replace('小时',' hours'); out = out.replace('95折','5% off'); return out; }
+function localizeRows(rows){ if((S.lang||'zh')==='zh') return rows; return rows.map(function(r){ return [ zh2enCell(r[0]), zh2enCell(r[1]), zh2enCell(r[2]||'') ]; }); }
+function table(rows){ var R = localizeRows(rows); var hdr = (S.lang==='en')? ['Package','Price','Note'] : ['套餐','价格','备注']; var body = R.map(function(r){return '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td>'+(r[2]||'')+'</td></tr>';}).join(''); return '<table><thead><tr><th>'+hdr[0]+'</th><th>'+hdr[1]+'</th><th>'+hdr[2]+'</th></tr></thead><tbody>'+body+'</tbody></table>'; }
+function tableKLT(){ var groups=['1v1','1v2','1v3','1v4-6']; var freqs=['1pw','2pw','3pw']; var thFreq=(S.lang==='en')? 'Freq' : '频次'; var th25=(S.lang==='en')? '25 weeks' : '25周'; var th50=(S.lang==='en')? '50 weeks' : '50周'; var html=''; groups.forEach(function(g){ html += '<div class=card><div class=q>'+g+'</div><table><thead><tr><th>'+thFreq+'</th><th>'+th25+'</th><th>'+th50+'</th></tr></thead><tbody>'; freqs.forEach(function(f){ var c25=K_LT[g][f]['25'].join(' '); var c50=K_LT[g][f]['50'].join(' '); html += '<tr><td>'+f+'</td><td>'+c25+'</td><td>'+c50+'</td></tr>'; }); html += '</tbody></table></div>'; }); return html; }
+function PEAK(s){ return s==='we' || s==='wk'; }
 function tierFromAdultLevel(){ return S.a_level==='zero'? 'zero' : (S.a_level==='basic'? 'basic' : 'full'); }
-function chooseHoursByUtilization(group){ return (group==='1v1'||group==='1v2')? (S.freq==='f2'||S.freq==='f3'?20:10) : 15; }
-function pickGroupByUtilization(group){
-  // 高峰优先更大组；若用户选1v1且不愿拼班，则尊重1v1
-  if(PEAK(S.sched)){
-    if(group==='1v1') return (S.join==='j_bring'||S.join==='j_join') ? '1v2' : '1v1';
-    if(group==='1v2') return '1v3';
-    if(group==='1v3') return '1v4';
-  }
-  return group;
-}
-function adultPriceTableForTier(tier){ return tier==='zero'? PRICE.adult_zero : (tier==='basic'? PRICE.adult_basic : PRICE.adult_full); }
-function findRow(rows, group, hours){ return rows.find(r=> r[0].startsWith(group+" "+hours+"hr")); }
+function priceTableByTier(t){ return t==='zero'? PRICE.adult_zero : (t==='basic'? PRICE.adult_basic : PRICE.adult_full); }
+function findRow(rows, group, hours){ for(var i=0;i<rows.length;i++){ if(rows[i][0].indexOf(group+' '+hours+'hr')===0) return rows[i]; } return null; }
+function chooseHours(group){ return (group==='1v1'||group==='1v2')? ((S.freq==='f2'||S.freq==='f3')?20:10) : 15; }
+function pickGroupByUtil(group){ if(PEAK(S.sched)){ if(group==='1v1') return (S.join==='j_bring'||S.join==='j_join')? '1v2':'1v1'; if(group==='1v2') return '1v3'; if(group==='1v3') return '1v4'; } return group; }
 
-function buildAdultRecommendation(){
-  const tier = tierFromAdultLevel();
-  const table = adultPriceTableForTier(tier);
-  let g = S.group || '1v2';
-  if(g==='1v1') S.join='j_none'; // 1v1 跳过拼班
-  g = pickGroupByUtilization(g);
-  const h = chooseHoursByUtilization(g);
-  const main = findRow(table, g, h) || table[0];
-  // 其他套餐（同层级其余组别）
-  const other = [];
-  const groups = ['1v1','1v2','1v3','1v4'];
-  groups.forEach(x=>{ if(x!==g){ const row = findRow(table, x, chooseHoursByUtilization(x)); if(row) other.push(row); }});
-  return { main, other };
-}
+// === build recs
+function buildAdult(){ var tier=tierFromAdultLevel(); var table=priceTableByTier(tier); var g=S.group||'1v2'; if(g==='1v1') S.join='j_none'; g=pickGroupByUtil(g); var h=chooseHours(g); var main=findRow(table,g,h)||table[0]; var other=[]; ['1v1','1v2','1v3','1v4'].forEach(function(x){ if(x!==g){ var r=findRow(table,x,chooseHours(x)); if(r) other.push(r); }}); return {main:main, other:other}; }
+function buildKids(){ if(S.k_mode==='flex'){ var table=PRICE.kid_flex; var g=S.k_group||'1v2'; var h=(g==='1v1'||g==='1v2')?10:15; var main=findRow(table,g,h)||table[0]; var other=[]; ['1v1','1v2','1v3','1v4'].forEach(function(x){ if(x!==g){ var r=findRow(table,x,(x==='1v1'||x==='1v2')?10:15); if(r) other.push(r); }}); return {main:main, other:other}; } else { var g2=S.k_group||'1v2'; var term=S.k_term||'25'; var freqMap={f1:'1pw',f2:'2pw',f3:'3pw'}; var f=freqMap[S.k_freq||'f1']; function toTuple(gg){ var r=K_LT[gg][f][term]; return [gg+' '+f, r[0], r[1]]; } var main2=toTuple(g2); var order=['1v1','1v2','1v3','1v4-6']; var other2=order.filter(function(x){return x!==g2;}).map(toTuple); return {main:main2, other:other2}; } }
 
-function buildKidsRecommendation(){
-  if(S.k_mode==='flex'){
-    const table = PRICE.kid_flex;
-    const g = S.k_group || '1v2';
-    const h = (g==='1v1'||g==='1v2')? 10 : 15;
-    const main = findRow(table, g, h) || table[0];
-    const other = [];
-    const groups = ['1v1','1v2','1v3','1v4'];
-    groups.forEach(x=>{ if(x!==g){ const row = findRow(table, x, (x==='1v1'||x==='1v2')?10:15); if(row) other.push(row); }});
-    return { main, other };
-  } else {
-    const freqMap = { f1:'1pw', f2:'2pw', f3:'3pw' };
-    const g = S.k_group || '1v2';
-    const term = S.k_term || '25';
-    const freq = freqMap[S.k_freq||'f1'];
-    const toTuple = (gg)=> [''+gg+' '+freq, ...K_LT[gg][freq][term]];
-    const main = toTuple(g);
-    const order = ['1v1','1v2','1v3','1v4-6'];
-    const other = order.filter(x=>x!==g).map(x=> toTuple(x));
-    return { main, other };
-  }
-}
+// === contact
+function contact(){ var zh=(S.lang==='zh'); var html=''; html += '<div class="hr"></div><div class=q>'+t('contact')+'</div>'; html += '<div class=grid>'; html += '<div class=card><label>'+t('name')+'<br><input id=c_name type=text></label></div>'; html += '<div class=card><label>'+t('phone')+'<br><input id=c_phone type=tel></label></div>'; html += '<div class=card><label>'+t('email')+'<br><input id=c_email type=email></label></div>'; if(zh){ html += '<div class=card><label>'+t('wechat')+'<br><input id=c_wechat type=text></label></div>'; } html += '</div>'; html += '<div class=card style="margin-top:8px"><label>'+t('notes')+'<br><textarea id=c_notes></textarea></label></div>'; html += '<div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button><button class="btn alt" onclick="submitLead()">'+t('submit')+'</button></div>'; return html; }
 
-// ===== 联系方式 & 提交
-function contactForm(){
-  const zh = (S.lang==='zh');
-  return `
-    <div class="hr"></div>
-    <div class="q">${t('contact')}</div>
-    <div class="grid">
-      <div class="card"><label>${t('name')}<br/><input id="c_name" type="text" required></label></div>
-      <div class="card"><label>${t('phone')}<br/><input id="c_phone" type="tel" required></label></div>
-      <div class="card"><label>${t('email')}<br/><input id="c_email" type="email" required></label></div>
-      ${zh? `<div class="card"><label>${t('wechat')}<br/><input id="c_wechat" type="text"></label></div>`:''}
-    </div>
-    <div class="card" style="margin-top:8px"><label>${t('notes')}<br/><textarea id="c_notes"></textarea></label></div>
+function submitLead(){ var name=document.getElementById('c\_name').value.trim(); var phone=document.getElementById('c\_phone').value.trim(); var email=document.getElementById('c\_email').value.trim(); if(!name||!phone||!email){ alert(S.lang==='zh'? '请填写姓名/电话/邮箱':'Please fill name/phone/email'); return; } S.submitted=true; render(); }
 
-```
-<div class="footer">
-  <button class="btn ghost" onclick="restartAll()">${t('restart')}</button>
-  <button class="btn alt" onclick="submitLead()">${t('submit')}</button>
-</div>
-```
-
-\`;
-}
-
-function submitLead(){
-const payload = {
-lang\:S.lang,
-audience\:S.audience,
-level\:S.audience==='adult'? S.a\_level : null,
-mode\:S.audience==='child'? S.k\_mode : null,
-group\:S.audience==='adult'? S.group : S.k\_group,
-schedule\:S.audience==='adult'? S.sched : S.k\_sched,
-frequency\:S.audience==='adult'? S.freq : S.k\_freq,
-term\_or\_hours\:S.audience==='child'? S.k\_term : null,
-name\:document.getElementById('c\_name').value.trim(),
-phone\:document.getElementById('c\_phone').value.trim(),
-email\:document.getElementById('c\_email').value.trim(),
-wechat:(document.getElementById('c\_wechat')||{value:''}).value.trim(),
-notes\:document.getElementById('c\_notes').value.trim(),
-ts\:new Date().toISOString()
-};
-if(!payload.name||!payload.phone||!payload.email){ alert(S.lang==='zh'? '请填写姓名/电话/邮箱' : 'Please fill name/phone/email'); return; }
-S.submitted = true;
-render();
-}
-
-// ===== 渲染流程
+// === Render
+function opt(label,call){ return '<div class=opt onclick="'+call+'">'+label+'</div>'; }
 function render(){
-if(S.submitted){
-app.innerHTML = `<h1>${t('title')}</h1>       <div class="card" style="text-align:center">         <div style="font-size:18px;margin:8px 0">${t('submitted')}</div>         <div class="footer" style="justify-content:center"><button class="btn" onclick="restartAll()">${t('restart')}</button></div>       </div>`;return;
-}
+if(S.submitted){ app.innerHTML='<h1>'+t('title')+'</h1><div class=card style="text-align:center"><div style="font-size:18px;margin:8px 0">'+t('submitted')+'</div><div class=footer style="justify-content:center"><button class=btn onclick="restartAll()">'+t('restart')+'</button></div></div>'; return; }
+if(!S.lang){ app.innerHTML='<h1>'+STR.en.title+' / '+STR.zh.title+'</h1><div class=q>'+STR.en.lang+'</div><div class=choices>'+ opt(STR.zh.zh,"setLang('zh')") + opt(STR.en.en,"setLang('en')") +'</div>'; return; }
+if(!S.audience){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('audience')+'</div><div class=choices>'+ opt(t('adult'),"setAudience('adult')") + opt(t('child'),"setAudience('child')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
 
-if(!S.lang){
-app.innerHTML = `<h1>${STR.en.title} / ${STR.zh.title}</h1>       <div class=q>${STR.en.lang}</div>       <div class=choices>${opt(STR.zh.zh,()=>{S.lang='zh';render()})}${opt(STR.en.en,()=>{S.lang='en';render()})}</div>`;return;
-}
-
-if(!S.audience){
-app.innerHTML = `<h1>${t('title')}</h1>       <div class=q>${t('audience')}</div>       <div class=choices>${opt(t('adult'),()=>{S.audience='adult';render()})}${opt(t('child'),()=>{S.audience='child';render()})}</div>       <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-}
-
-// 成人路径
 if(S.audience==='adult'){
-if(!S.a\_level){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('a_level')}</div>         <div class=choices>${opt(t('zero'),()=>{S.a_level='zero';render()})}${opt(t('basic'),()=>{S.a_level='basic';render()})}${opt(t('inter'),()=>{S.a_level='inter';render()})}${opt(t('adv'),()=>{S.a_level='adv';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-}
-if(!S.group){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('group')}</div>         <div class=choices>${opt(t('g1'),()=>{S.group='1v1';render()})}${opt(t('g2'),()=>{S.group='1v2';render()})}${opt(t('g3'),()=>{S.group='1v3';render()})}${opt(t('g4'),()=>{S.group='1v4';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-}
-if(S.group!=='1v1' && !S.join){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('join')}</div>         <div class=choices>${opt(t('j_bring'),()=>{S.join='j_bring';render()})}${opt(t('j_join'),()=>{S.join='j_join';render()})}${opt(t('j_none'),()=>{S.join='j_none';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-} else if(S.group==='1v1'){
-S.join = 'j\_none';
-}
-if(!S.sched){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('sched')}</div>         <div class=choices>${opt(t('wd'),()=>{S.sched='wd';render()})}${opt(t('we'),()=>{S.sched='we';render()})}${opt(t('wk'),()=>{S.sched='wk';render()})}${opt(t('flex2'),()=>{S.sched='flex';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-}
-if(!S.freq){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('freq')}</div>         <div class=choices>${opt(t('f1'),()=>{S.freq='f1';render()})}${opt(t('f2'),()=>{S.freq='f2';render()})}${opt(t('f3'),()=>{S.freq='f3';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-}
-const rec = buildAdultRecommendation();
-const mainCard = (()=>{ const x = localizeRows(\[rec.main])\[0]; return `<div class=card><div class=muted style="font-size:12px">${t('main')}</div><div class=q>${x[0]}</div><div>${x[1]}</div><div class=muted>${x[2]||''}</div></div>`; })();
-const otherCards = rec.other.map(r=>{ const x = localizeRows(\[r])\[0]; return `<div class=card><div class=muted style="font-size:12px">${t('alt')}</div><div class=q>${x[0]}</div><div>${x[1]}</div><div class=muted>${x[2]||''}</div></div>`; }).join('');
-
-```
-app.innerHTML = `<h1>${t('title')}</h1>
-  <div class=q>${t('rec')}</div>
-  <div class=recgrid>${mainCard}${otherCards}</div>
-  <div class=hr></div>
-  <div class=panel>
-    <h3 style="margin:6px 0">${t('price_all')}</h3>
-    <div class=grid>
-      <div class=card><div class=q>${t('adult_zero')}</div>${table(PRICE.adult_zero)}</div>
-      <div class=card><div class=q>${t('adult_basic')}</div>${table(PRICE.adult_basic)}</div>
-      <div class=card><div class=q>${t('adult_full')}</div>${table(PRICE.adult_full)}</div>
-    </div>
-  </div>
-  ${contactForm()}
-`;
+if(!S.a\_level){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('a\_level')+'</div><div class=choices>'+ opt(t('zero'),"setALevel('zero')") + opt(t('basic'),"setALevel('basic')") + opt(t('inter'),"setALevel('inter')") + opt(t('adv'),"setALevel('adv')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+if(!S.group){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('group')+'</div><div class=choices>'+ opt('1v1',"setGroup('1v1')") + opt('1v2',"setGroup('1v2')") + opt('1v3',"setGroup('1v3')") + opt('1v4',"setGroup('1v4')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+if(S.group!=='1v1' && !S.join){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('join')+'</div><div class=choices>'+ opt(t('j\_bring'),"setJoin('j\_bring')") + opt(t('j\_join'),"setJoin('j\_join')") + opt(t('j\_none'),"setJoin('j\_none')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; } else if(S.group==='1v1'){ S.join='j\_none'; }
+if(!S.sched){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('sched')+'</div><div class=choices>'+ opt(t('wd'),"setSched('wd')") + opt(t('we'),"setSched('we')") + opt(t('wk'),"setSched('wk')") + opt(t('flex2'),"setSched('flex')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+if(!S.freq){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('freq')+'</div><div class=choices>'+ opt(t('f1'),"setFreq('f1')") + opt(t('f2'),"setFreq('f2')") + opt(t('f3'),"setFreq('f3')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+var recA = buildAdult();
+var mainX = localizeRows(\[recA.main])\[0];
+var otherX = recA.other.map(function(r){ return localizeRows(\[r])\[0]; });
+var cards = '<div class=card><div class=muted>'+t('main')+'</div><div class=q>'+mainX\[0]+'</div><div>'+mainX\[1]+'</div><div class=muted>'+(mainX\[2]||'')+'</div></div>';
+otherX.forEach(function(x){ cards += '<div class=card><div class=muted>'+t('alt')+'</div><div class=q>'+x\[0]+'</div><div>'+x\[1]+'</div><div class=muted>'+(x\[2]||'')+'</div></div>'; });
+app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('rec')+'</div><div class=recgrid>'+cards+'</div><div class=hr></div><div class=panel><h3 style="margin:6px 0">'+t('price\_all')+'</h3><div class=grid><div class=card><div class=q>'+t('adult\_zero')+'</div>'+table(PRICE.adult\_zero)+'</div><div class=card><div class=q>'+t('adult\_basic')+'</div>'+table(PRICE.adult\_basic)+'</div><div class=card><div class=q>'+t('adult\_full')+'</div>'+table(PRICE.adult\_full)+'</div></div></div>'+ contact();
 return;
-```
-
 }
 
-// 儿童路径
 if(S.audience==='child'){
-if(!S.k\_mode){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('k_mode')}</div>         <div class=choices>${opt(t('flex'),()=>{S.k_mode='flex';render()})}${opt(t('longterm'),()=>{S.k_mode='longterm';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
+if(!S.k\_mode){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('k\_mode')+'</div><div class=choices>'+ opt(t('flex'),"setKMode('flex')") + opt(t('longterm'),"setKMode('longterm')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+if(!S.k\_group){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('group')+'</div><div class=choices>'+ opt('1v1',"setKGroup('1v1')") + opt('1v2',"setKGroup('1v2')") + opt('1v3',"setKGroup('1v3')") + opt('1v4-6',"setKGroup('1v4-6')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+if(!S.k\_join){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('join')+'</div><div class=choices>'+ opt(t('j\_bring'),"setKJoin('j\_bring')") + opt(t('j\_join'),"setKJoin('j\_join')") + opt(t('j\_none'),"setKJoin('j\_none')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+if(!S.k\_sched){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('sched')+'</div><div class=choices>'+ opt(t('wd'),"setKSched('wd')") + opt(t('we'),"setKSched('we')") + opt(t('wk'),"setKSched('wk')") + opt(t('flex2'),"setKSched('flex')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+if(!S.k\_freq){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('freq')+'</div><div class=choices>'+ opt(t('f1'),"setKFreq('f1')") + opt(t('f2'),"setKFreq('f2')") + opt(t('f3'),"setKFreq('f3')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+if(S.k\_mode==='flex' && !S.k\_term){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('hours')+'</div><div class=choices>'+ opt(t('h10'),"setKTerm('10')") + opt(t('h15'),"setKTerm('15')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+if(S.k\_mode==='longterm' && !S.k\_term){ app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('hours')+'</div><div class=choices>'+ opt(t('t25'),"setKTerm('25')") + opt(t('t50'),"setKTerm('50')") +'</div><div class=footer><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; return; }
+var recK = buildKids(); var mainY = localizeRows(\[recK.main])\[0]; var otherY = recK.other.map(function(r){ return localizeRows(\[r])\[0]; }); var cards2 = '<div class=card><div class=muted>'+t('main')+'</div><div class=q>'+mainY\[0]+'</div><div>'+mainY\[1]+'</div><div class=muted>'+(mainY\[2]||'')+'</div></div>'; otherY.forEach(function(x){ cards2 += '<div class=card><div class=muted>'+t('alt')+'</div><div class=q>'+x\[0]+'</div><div>'+x\[1]+'</div><div class=muted>'+(x\[2]||'')+'</div></div>'; }); app.innerHTML='<h1>'+t('title')+'</h1><div class=q>'+t('rec')+'</div><div class=recgrid>'+cards2+'</div><div class=hr></div><div class=panel><h3 style="margin:6px 0">'+t('price\_all')+'</h3><div class=grid><div class=card><div class=q>'+t('kid\_flex')+'</div>'+table(PRICE.kid\_flex)+'</div><div class=card><div class=q>'+t('kid\_lt')+'</div>'+tableKLT()+'</div></div></div>'+ contact(); return;
 }
-if(!S.k\_group){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('group')}</div>         <div class=choices>${opt(t('g1'),()=>{S.k_group='1v1';render()})}${opt(t('g2'),()=>{S.k_group='1v2';render()})}${opt(t('g3'),()=>{S.k_group='1v3';render()})}${opt(t('g46'),()=>{S.k_group='1v4-6';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
 }
-if(!S.k\_join){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('join')}</div>         <div class=choices>${opt(t('j_bring'),()=>{S.k_join='j_bring';render()})}${opt(t('j_join'),()=>{S.k_join='j_join';render()})}${opt(t('j_none'),()=>{S.k_join='j_none';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-}
-if(!S.k\_sched){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('sched')}</div>         <div class=choices>${opt(t('wd'),()=>{S.k_sched='wd';render()})}${opt(t('we'),()=>{S.k_sched='we';render()})}${opt(t('wk'),()=>{S.k_sched='wk';render()})}${opt(t('flex2'),()=>{S.k_sched='flex';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-}
-if(!S.k\_freq){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('freq')}</div>         <div class=choices>${opt(t('f1'),()=>{S.k_freq='f1';render()})}${opt(t('f2'),()=>{S.k_freq='f2';render()})}${opt(t('f3'),()=>{S.k_freq='f3';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-}
-if(S.k\_mode==='flex' && !S.k\_term){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('hours')}</div>         <div class=choices>${opt(t('h10'),()=>{S.k_term='10';render()})}${opt(t('h15'),()=>{S.k_term='15';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-}
-if(S.k\_mode==='longterm' && !S.k\_term){
-app.innerHTML = `<h1>${t('title')}</h1>         <div class=q>${t('hours')}</div>         <div class=choices>${opt(t('t25'),()=>{S.k_term='25';render()})}${opt(t('t50'),()=>{S.k_term='50';render()})}</div>         <div class=footer><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;return;
-}
-const rec = buildKidsRecommendation();
-const mainCard = (()=>{ const x = localizeRows(\[rec.main])\[0]; return `<div class=card><div class=muted style="font-size:12px">${t('main')}</div><div class=q>${x[0]}</div><div>${x[1]}</div><div class=muted>${x[2]||''}</div></div>`; })();
-const otherCards = rec.other.map(r=>{ const x = localizeRows(\[r])\[0]; return `<div class=card><div class=muted style="font-size:12px">${t('alt')}</div><div class=q>${x[0]}</div><div>${x[1]}</div><div class=muted>${x[2]||''}</div></div>`; }).join('');
 
-```
-app.innerHTML = `<h1>${t('title')}</h1>
-  <div class=q>${t('rec')}</div>
-  <div class=recgrid>${mainCard}${otherCards}</div>
-  <div class=hr></div>
-  <div class=panel>
-    <h3 style="margin:6px 0">${t('price_all')}</h3>
-    <div class=grid>
-      <div class=card><div class=q>${t('kid_flex')}</div>${table(PRICE.kid_flex)}</div>
-      <div class=card><div class=q>${t('kid_lt')}</div>${tableKLT()}</div>
-    </div>
-  </div>
-  ${contactForm()}
-`;
-return;
-```
-
-}
-}
+// setter fns for inline onclick
+function setLang(v){ S.lang=v; render(); }
+function setAudience(v){ S.audience=v; render(); }
+function setALevel(v){ S.a\_level=v; render(); }
+function setGroup(v){ S.group=v; render(); }
+function setJoin(v){ S.join=v; render(); }
+function setSched(v){ S.sched=v; render(); }
+function setFreq(v){ S.freq=v; render(); }
+function setKMode(v){ S.k\_mode=v; render(); }
+function setKGroup(v){ S.k\_group=v; render(); }
+function setKJoin(v){ S.k\_join=v; render(); }
+function setKSched(v){ S.k\_sched=v; render(); }
+function setKFreq(v){ S.k\_freq=v; render(); }
+function setKTerm(v){ S.k\_term=v; render(); }
 
 render(); </script>
 
