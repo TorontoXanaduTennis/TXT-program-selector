@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Toronto Xanadu Tennis • Recommender (Clean v3.5)</title>
+<title>Toronto Xanadu Tennis • Recommender (Clean v3.5 • fixed)</title>
 <style>
   body{margin:0;background:#ffffff;color:#1f2937;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
   .topbar{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;
@@ -31,7 +31,7 @@
   textarea{min-height:88px}
   label{font-size:14px;color:#6b7280}
   .muted{color:#6b7280}
-  /* 结果页高亮 */
+  /* 结果高亮 */
   .mainrec{background:#d1fae5!important}
   .altrec{background:#e0f2fe!important}
 </style>
@@ -95,25 +95,25 @@ var STR = {
 };
 function t(k){ return STR[S.lang||'zh'][k]; }
 
-// ===== 价目（按要求修改）
+// ===== 价目（按你的四点要求）
 var PRICE = {
+  // 1) 成人零基础 1v1 20hr 去除“95折”
   adult_zero:[["1v1 10hr","$800/人","试课$100"],["1v1 20hr","$1550/人",""],["1v2 10hr","$1000/共","试课$140"],["1v2 20hr","$1900/共",""],["1v3 15hr","$1500/共","试课$240"],["1v4 15hr","$1800/共","试课$280"]],
   adult_basic:[["1v1 10hr","$900/人","试课$110"],["1v1 20hr","$1710/人",""],["1v2 10hr","$1250/共","试课$150"],["1v2 20hr","$2375/共",""],["1v3 15hr","$1500/共","试课$240"],["1v4 15hr","$1800/共","试课$280"]],
   adult_full:[["1v1 10hr","$1300/人","试课$140"],["1v1 20hr","$2470/人",""],["1v2 10hr","$1500/共","试课$160"],["1v2 20hr","$2850/共",""],["1v3 15hr","$2400/共","试课$270"],["1v4 15hr","$2800/共","试课$320"]],
   kid_flex:[["1v1 10hr","$900/人","试课$100"],["1v2 10hr","$1250/共","试课$140"],["1v3 15hr","$500/人","试课$240"],["1v4 15hr","$450/人","试课$280"]]
 };
-// 长期儿童课：为 1v3 与 1v4-6 增加 3pw 价格
+// 2) 长期儿童课：给 1v3 / 1v4-6 增加 3pw 价格
 var K_LT = {
   '1v1':{'1pw':{'25':['$1875','(75/hr)'],'50':['$3600','(72/hr)']},'2pw':{'25':['$3550','(71/hr)'],'50':['$6700','(67/hr)']},'3pw':{'25':['$4875','(65/hr)'],'50':['$9300','(62/hr)']}},
   '1v2':{'1pw':{'25':['$2375','(95/hr)'],'50':['$4600','(92/hr)']},'2pw':{'25':['$4550','(91/hr)'],'50':['$8700','(87/hr)']},'3pw':{'25':['$6375','(85/hr)'],'50':['$12100','(80.67/hr)']}},
-  '1v3':{'1pw':{'25':['$3000','(120/hr)'],'50':['$5850','(117/hr)']},'2pw':{'25':['$5750','(115/hr)'],'50':['$11000','(110/hr)']},'3pw':{'25':['$7875','(105/hr)'],'50':['$15000','(100/hr)')}},
+  '1v3':{'1pw':{'25':['$3000','(120/hr)'],'50':['$5850','(117/hr)']},'2pw':{'25':['$5750','(115/hr)'],'50':['$11000','(110/hr)']},'3pw':{'25':['$7875','(105/hr)'],'50':['$15000','(100/hr)']}},
   '1v4-6':{'1pw':{'25':['$3650','(146/hr)'],'50':['$7150','(143/hr)']},'2pw':{'25':['$7050','(141/hr)'],'50':['$13650','(136.5/hr)']},'3pw':{'25':['$9750','(130/hr)'],'50':['$18750','(125/hr)']}}
 };
 
 // ===== 状态 & 导航
 var S = {lang:null, history:[], audience:null, a_level:null, group:null, join:null, coach:null, sched:null, freq:null, k_mode:null, k_group:null, k_join:null, k_coach:null, k_sched:null, k_freq:null, k_term:null, submitted:false};
 var app = document.getElementById('app');
-
 function pushStep(){ S.history.push(JSON.stringify(S)); }
 function goBack(){ if(S.history.length>0){ var prev = S.history.pop(); var restored = JSON.parse(prev); var keep = S.history.slice(); S = restored; S.history = keep; render(); } }
 function restartAll(){ S = {lang:null, history:[], audience:null, a_level:null, group:null, join:null, coach:null, sched:null, freq:null, k_mode:null, k_group:null, k_join:null, k_coach:null, k_sched:null, k_freq:null, k_term:null, submitted:false}; render(); }
@@ -132,12 +132,12 @@ function priceTableByTier(t){ return t==='zero'? PRICE.adult_zero : (t==='basic'
 function buildAdult(){ var tier=tierFromAdultLevel(); var table=priceTableByTier(tier); var g=S.group||'1v2'; var h=chooseHours(g); var main=findRow(table,g,h)||table[0]; var other=[]; var order=['1v1','1v2','1v3','1v4']; var i; for(i=0;i<order.length;i++){ if(order[i]!==g){ var r=findRow(table,order[i],chooseHours(order[i])); if(r) other.push(r); } } var title = (tier==='zero')? t('adult_zero') : (tier==='basic'? t('adult_basic'): t('adult_full')); return {title:title, main:main, other:other}; }
 function buildKids(){ if(S.k_mode==='flex'){ var g=S.k_group||'1v2'; var h=(g==='1v1'||g==='1v2')?10:15; var table=PRICE.kid_flex; var main=findRow(table,g,h)||table[0]; var other=[]; var order=['1v1','1v2','1v3','1v4']; var i; for(i=0;i<order.length;i++){ if(order[i]!==g){ var r=findRow(table,order[i],(order[i]==='1v1'||order[i]==='1v2')?10:15); if(r) other.push(r);} } return {title:t('kid_flex'), main:main, other:other}; } else { var freqMap={f1:'1pw',f2:'2pw',f3:'3pw'}; var g2=S.k_group||'1v2', term=S.k_term||'25', f=freqMap[S.k_freq||'f1']; function toRow(gg){ if(!K_LT[gg] || !K_LT[gg][f] || !K_LT[gg][f][term]) return null; var tup=K_LT[gg][f][term]; return [gg+' '+f, tup[0], tup[1]];} var main2=toRow(g2); if(!main2){ var fallback=['1v1','1v2','1v3','1v4-6'], ii; for(ii=0; ii<fallback.length; ii++){ main2=toRow(fallback[ii]); if(main2) break; } } var other2=[], order2=['1v1','1v2','1v3','1v4-6'], j; var mainKey = main2 ? main2[0].split(' ')[0] : null; for(j=0;j<order2.length;j++){ var row=toRow(order2[j]); if(row && (!mainKey || row[0].indexOf(mainKey)!==0)) other2.push(row); } if(!main2){ main2=['—','—','']; } return {title:t('kid_lt'), main:main2, other:other2}; } }
 
-// ===== 联系/提交（微信必填：中文界面）
+// ===== 联系/提交
 function contactBlock(){ var zh=(S.lang==='zh'); var html=''; html+='<div class="hr"></div><div class="q">'+t('contact')+'</div>'; html+='<div class="grid">'; html+='<div class="card"><label>'+t('name')+'<br><input id="c_name" type="text"></label></div>'; html+='<div class="card"><label>'+t('phone')+'<br><input id="c_phone" type="tel"></label></div>'; html+='<div class="card"><label>'+t('email')+'<br><input id="c_email" type="email"></label></div>'; html+=(zh?'<div class="card"><label>'+t('wechat')+'<br><input id="c_wechat" type="text"></label></div>':''); html+='</div>'; html+='<div class="card" style="margin-top:8px"><label>'+t('notes')+'<br><textarea id="c_notes"></textarea></label></div>'; html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back': '返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button><button class="btn alt" onclick="submitLead()">'+t('submit')+'</button></div>'; return html; }
 function submitLead(){ var name=document.getElementById('c_name').value.trim(); var phone=document.getElementById('c_phone').value.trim(); var email=document.getElementById('c_email').value.trim(); var we=document.getElementById('c_wechat'); if(!name||!phone||!email){ alert((S.lang==='zh')?'请填写姓名/电话/邮箱':'Please fill name/phone/email'); return; } if(S.lang==='zh' && we && !we.value.trim()){ alert('请填写微信号'); return; } S.submitted=true; render(); }
 
-// ===== 选项按钮（点击后橙色）
-function opt(label, call){ return '<div class="opt" onclick="'+call+'; this.classList.add(\\'selected\\')">'+label+'</div>'; }
+// ===== 选项按钮（3）鼠标/点击橙色
+function opt(label, call){ return '<div class="opt" onclick="'+call+'; this.classList.add(\'selected\')">'+label+'</div>'; }
 
 // ===== 渲染
 function render(){ var html='';
@@ -157,7 +157,7 @@ function render(){ var html='';
     if(!S.coach){ html+='<h1>'+t('title')+'</h1><div class="q">'+t('coach')+'</div><div class="choices">'+opt(t('cm'),"pushStep(); S.coach='m'; render();")+opt(t('cf'),"pushStep(); S.coach='f'; render();")+opt(t('ca'),"pushStep(); S.coach='a'; render();")+'</div><div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; app.innerHTML=html; return; }
     if(!S.sched){ html+='<h1>'+t('title')+'</h1><div class="q">'+t('sched')+'</div><div class="choices">'+opt(t('wd'),"pushStep(); S.sched='wd'; render();")+opt(t('we'),"pushStep(); S.sched='we'; render();")+opt(t('wk'),"pushStep(); S.sched='wk'; render();")+opt(t('flex2'),"pushStep(); S.sched='flex'; render();")+'</div><div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; app.innerHTML=html; return; }
     if(!S.freq){ html+='<h1>'+t('title')+'</h1><div class="q">'+t('freq')+'</div><div class="choices">'+opt(t('f1'),"pushStep(); S.freq='f1'; render();")+opt(t('f2'),"pushStep(); S.freq='f2'; render();")+opt(t('f3'),"pushStep(); S.freq='f3'; render();")+'</div><div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; app.innerHTML=html; return; }
-    var recA=buildAdult(); var mainA=localizeRows([recA.main])[0]; var i; html+='<h1>'+t('title')+'</h1><div class="q">'+t('rec')+'</div><div class="recgrid">'; html+='<div class="card mainrec"><div class="muted">'+t('main')+'</div><div class="q">'+recA.title+' · '+mainA[0]+'</div><div>'+mainA[1]+'</div><div class="muted">'+(mainA[2]||'')+'</div></div>'; for(i=0;i<recA.other.length;i++){ var r=localizeRows([recA.other[i]])[0]; html+='<div class="card altrec"><div class="muted">'+t('alt')+'</div><div class="q">'+recA.title+' · '+r[0]+'</div><div>'+r[1]+'</div><div class="muted">'+(r[2]||'')+'</div></div>'; } html+='</div><div class="hr"></div><div class="panel"><h3 style="margin:6px 0)">'+t('price_all')+'</h3><div class="grid"><div class="card"><div class="q">'+t('adult_zero')+'</div>'+table(PRICE.adult_zero)+'</div><div class="card"><div class="q">'+t('adult_basic')+'</div>'+table(PRICE.adult_basic)+'</div><div class="card"><div class="q">'+t('adult_full')+'</div>'+table(PRICE.adult_full)+'</div></div></div>'+contactBlock(); app.innerHTML=html; return; }
+    var recA=buildAdult(); var mainA=localizeRows([recA.main])[0]; var i; html+='<h1>'+t('title')+'</h1><div class="q">'+t('rec')+'</div><div class="recgrid">'; html+='<div class="card mainrec"><div class="muted">'+t('main')+'</div><div class="q">'+recA.title+' · '+mainA[0]+'</div><div>'+mainA[1]+'</div><div class="muted">'+(mainA[2]||'')+'</div></div>'; for(i=0;i<recA.other.length;i++){ var r=localizeRows([recA.other[i]])[0]; html+='<div class="card altrec"><div class="muted">'+t('alt')+'</div><div class="q">'+recA.title+' · '+r[0]+'</div><div>'+r[1]+'</div><div class="muted">'+(r[2]||'')+'</div></div>'; } html+='</div><div class="hr"></div><div class="panel"><h3 style="margin:6px 0">'+t('price_all')+'</h3><div class="grid"><div class="card"><div class="q">'+t('adult_zero')+'</div>'+table(PRICE.adult_zero)+'</div><div class="card"><div class="q">'+t('adult_basic')+'</div>'+table(PRICE.adult_basic)+'</div><div class="card"><div class="q">'+t('adult_full')+'</div>'+table(PRICE.adult_full)+'</div></div></div>'+contactBlock(); app.innerHTML=html; return; }
 
   // 儿童路径
   if(S.audience==='child'){
@@ -168,7 +168,7 @@ function render(){ var html='';
     if(!S.k_sched){ html+='<h1>'+t('title')+'</h1><div class="q">'+t('sched')+'</div><div class="choices">'+opt(t('wd'),"pushStep(); S.k_sched='wd'; render();")+opt(t('we'),"pushStep(); S.k_sched='we'; render();")+opt(t('wk'),"pushStep(); S.k_sched='wk'; render();")+opt(t('flex2'),"pushStep(); S.k_sched='flex'; render();")+'</div><div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; app.innerHTML=html; return; }
     if(!S.k_freq){ html+='<h1>'+t('title')+'</h1><div class="q">'+t('freq')+'</div><div class="choices">'+opt(t('f1'),"pushStep(); S.k_freq='f1'; render();")+opt(t('f2'),"pushStep(); S.k_freq='f2'; render();")+opt(t('f3'),"pushStep(); S.k_freq='f3'; render();")+'</div><div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; app.innerHTML=html; return; }
     if(S.k_mode==='longterm' && !S.k_term){ html+='<h1>'+t('title')+'</h1><div class="q">'+t('term')+'</div><div class="choices">'+opt(t('term25'),"pushStep(); S.k_term='25'; render();")+opt(t('term50'),"pushStep(); S.k_term='50'; render();")+'</div><div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; app.innerHTML=html; return; }
-    var recK=buildKids(); var mainK=localizeRows([recK.main])[0]; var k; html+='<h1>'+t('title')+'</h1><div class="q">'+t('rec')+'</div><div class="recgrid">'; html+='<div class="card mainrec"><div class="muted)">'+t('main')+'</div><div class="q">'+recK.title+' · '+mainK[0]+'</div><div>'+mainK[1]+'</div><div class="muted">'+(mainK[2]||'')+'</div></div>'; for(k=0;k<recK.other.length;k++){ if(!recK.other[k]) continue; var r2=localizeRows([recK.other[k]])[0]; if(!r2) continue; html+='<div class="card altrec"><div class="muted">'+t('alt')+'</div><div class="q">'+recK.title+' · '+r2[0]+'</div><div>'+r2[1]+'</div><div class="muted">'+(r2[2]||'')+'</div></div>'; } html+='</div><div class="hr"></div><div class="panel"><h3 style="margin:6px 0">'+t('price_all')+'</h3><div class="grid"><div class="card"><div class="q">'+t('kid_flex')+'</div>'+table(PRICE.kid_flex)+'</div><div class="card"><div class="q">'+t('kid_lt')+'</div>'+tableKLT()+'</div></div></div>'+contactBlock(); app.innerHTML=html; return; }
+    var recK=buildKids(); var mainK=localizeRows([recK.main])[0]; var k; html+='<h1>'+t('title')+'</h1><div class="q">'+t('rec')+'</div><div class="recgrid">'; html+='<div class="card mainrec"><div class="muted">'+t('main')+'</div><div class="q">'+recK.title+' · '+mainK[0]+'</div><div>'+mainK[1]+'</div><div class="muted">'+(mainK[2]||'')+'</div></div>'; for(k=0;k<recK.other.length;k++){ if(!recK.other[k]) continue; var r2=localizeRows([recK.other[k]])[0]; if(!r2) continue; html+='<div class="card altrec"><div class="muted">'+t('alt')+'</div><div class="q">'+recK.title+' · '+r2[0]+'</div><div>'+r2[1]+'</div><div class="muted">'+(r2[2]||'')+'</div></div>'; } html+='</div><div class="hr"></div><div class="panel"><h3 style="margin:6px 0">'+t('price_all')+'</h3><div class="grid"><div class="card"><div class="q">'+t('kid_flex')+'</div>'+table(PRICE.kid_flex)+'</div><div class="card"><div class="q">'+t('kid_lt')+'</div>'+tableKLT()+'</div></div></div>'+contactBlock(); app.innerHTML=html; return; }
 }
 
 // 初始渲染
