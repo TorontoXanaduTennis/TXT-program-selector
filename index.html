@@ -4,12 +4,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Xanadu Tennis · Recommender (Test v2.1)</title>
+  <title>Xanadu Tennis · Recommender (Smart v2.2)</title>
   <style>
     :root{--bg:#0f1020;--card:#191a2e;--text:#e9ecf1;--muted:#a9afc3;--brand:#7c3aed}
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#0f1020,#12122a);color:var(--text)}
-    .wrap{max-width:920px;margin:0 auto;padding:24px}
+    .wrap{max-width:980px;margin:0 auto;padding:24px}
     .card{background:var(--card);border:1px solid #2a2b48;border-radius:16px;padding:18px;box-shadow:0 6px 24px #00000055}
     h1{margin:0 0 8px;font-size:22px}
     .q{font-weight:700;margin:8px 0 4px}
@@ -25,6 +25,8 @@
     .footer{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
     .btn{border:none;border-radius:12px;padding:10px 12px;background:#2a2b48;color:var(--text);cursor:pointer}
     .btn.primary{background:var(--brand)}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #3a3b5e;color:var(--muted);font-size:12px;margin-right:6px}
+    .recgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
   </style>
 </head>
 <body>
@@ -33,39 +35,49 @@
   </div>
 
 <script>
-// ===== i18n (单语呈现，选择后整站只用该语言) =====
+// ===== i18n（选择后全站单语） =====
 const STR = {
   zh:{
-    title:'课程推荐测试',
+    title:'课程推荐（智能分档 测试版）',
     lang:'请选择语言', zh:'中文', en:'English',
     audience:'请选择报名对象', adult:'成人 (14+)', child:'儿童 U14',
     a_level:'请选择成人当前水平', zero:'零基础', basic:'有一定基础', inter:'能对打/发球', adv:'能比赛',
     k_mode:'请选择儿童课程模式', flex:'短期 Flex', longterm:'长期 固定周课',
-    next:'下一步', back:'上一步', restart:'重新开始',
-    rec:'推荐：',
-    tip_adult:'根据您的水平，建议选择以下类型。下方附完整价目表，便于对比。',
-    tip_kid:'根据选择的模式，建议如下；下方附完整价目表。',
+    group:'更偏好的上课人数？', g1:'1v1', g2:'1v2', g3:'1v3', g4:'1v4', g46:'1v4–6',
+    join:'是否可自带队友或接受拼班？', j_bring:'我能带1–3位朋友', j_join:'愿意拼班（由我们匹配）', j_none:'都不方便',
+    sched:'时间偏好', wd:'工作日白天', we:'工作日晚间', wk:'周末', flex2:'都可以',
+    freq:'每周计划上课频率', f1:'1×/周', f2:'2×/周', f3:'3×+/周',
+    budget:'预算倾向（每10–20小时参考）', b1:'<$900', b2:'$900–$1500', b3:'$1500–$2000', b4:'>$2000',
+    hours:'请选择课时/学期', h10:'10小时', h15:'15小时', t25:'半年(25周)', t50:'一年(50周)',
+    rec:'为您生成的推荐', main:'主推荐', alt:'经济备选', up:'进阶升级',
+    tip_peak:'高峰期多人班更易排期且人均更省', tip_group:'自组/拼班可更快开班',
     price_all:'完整价目表',
     adult_zero:'成人 · 零基础（红球场）', adult_basic:'成人 · 进阶专项（半场）', adult_full:'成人 · 定制训练（全场）',
     kid_flex:'U14 · 短期 Flex', kid_lt:'U14 · 长期固定（半年/一年）',
+    back:'上一步', restart:'重新开始'
   },
   en:{
-    title:'Course Recommender (Test)',
+    title:'Course Recommender (Smart tiers · Test)',
     lang:'Choose your language', zh:'中文', en:'English',
     audience:'Who is this for?', adult:'Adult (14+)', child:'Child (U14)',
     a_level:'Select your current level', zero:'True beginner', basic:'Some basics', inter:'Can rally/serve', adv:'Match-ready',
     k_mode:'Select course mode', flex:'Short-term Flex', longterm:'Long-term weekly',
-    next:'Next', back:'Back', restart:'Restart',
-    rec:'Recommendation:',
-    tip_adult:'Based on your level, here is a simple recommendation. Full price list below for comparison.',
-    tip_kid:'Based on the selected mode. Full price list follows.',
+    group:'Preferred class size?', g1:'1v1', g2:'1v2', g3:'1v3', g4:'1v4', g46:'1v4–6',
+    join:'Can you bring friends or join matching?', j_bring:'I can bring 1–3 friends', j_join:'Happy to be matched', j_none:'Prefer not',
+    sched:'Schedule preference', wd:'Weekday daytime', we:'Weekday evening', wk:'Weekend', flex2:'Flexible',
+    freq:'Sessions per week', f1:'1×/week', f2:'2×/week', f3:'3×+/week',
+    budget:'Budget preference (per 10–20 hours)', b1:'<$900', b2:'$900–$1500', b3:'$1500–$2000', b4:'>$2000',
+    hours:'Choose hours/term', h10:'10 hours', h15:'15 hours', t25:'Half-year (25)', t50:'Full-year (50)',
+    rec:'Your recommendations', main:'Top match', alt:'Budget option', up:'Upgrade',
+    tip_peak:'During peak hours, group classes schedule faster and cost less per person', tip_group:'Self-organized or matched groups start sooner',
     price_all:'Full Price List',
     adult_zero:'Adults · Zero Beginner (Red court)', adult_basic:'Adults · Skill Focus (Half court)', adult_full:'Adults · Custom (Full court)',
-    kid_flex:'U14 · Short-term Flex', kid_lt:'U14 · Long-term (Half/Full year)'
+    kid_flex:'U14 · Short-term Flex', kid_lt:'U14 · Long-term (Half/Full year)',
+    back:'Back', restart:'Restart'
   }
 };
 
-// ===== 数据（仅用于展示价目，不做花哨命名） =====
+// ===== 价目（不使用内部命名，仅表格行） =====
 const PRICE = {
   adult_zero:[
     ['1v1 10hr','$800/人','试课$100'],
@@ -122,9 +134,9 @@ const K_LT = {
   }
 };
 
-const S = {lang:null, audience:null, a_level:null, k_mode:null};
+// ===== 计算辅助 =====
+const S = {lang:null, audience:null, a_level:null, k_mode:null, group:null, join:null, sched:null, freq:null, budget:null, k_group:null, k_join:null, k_sched:null, k_freq:null, k_term:null};
 const $app = document.getElementById('app');
-
 function t(k){return STR[S.lang||'zh'][k]}
 function opt(label, on){return `<div class="opt" onclick="(${on})()">${label}</div>`}
 function table(rows){
@@ -135,10 +147,9 @@ function table(rows){
 function tableKLT(){
   const groups=['1v1','1v2','1v3','1v4-6'];
   const freqs=['1pw','2pw','3pw'];
-  const terms=['25','50'];
   let html='';
   groups.forEach(g=>{
-    html += `<div class="card"><div class="q">${g}</div><table><thead><tr><th>Freq</th><th>25</th><th>50</th></tr></thead><tbody>`;
+    html += `<div class=card><div class=q>${g}</div><table><thead><tr><th>Freq</th><th>25</th><th>50</th></tr></thead><tbody>`;
     freqs.forEach(f=>{
       const c25=K_LT[g][f]['25'].join(' ');
       const c50=K_LT[g][f]['50'].join(' ');
@@ -149,60 +160,229 @@ function tableKLT(){
   return html;
 }
 
+function isPeak(s){return s==='we' || s==='wk'} // we=weekday evening, wk=weekend
+function perPersonPrice(tier, group, hours){
+  // tier: 'zero'|'basic'|'full' (derived)
+  const map = tier==='zero'? PRICE.adult_zero : (tier==='basic'? PRICE.adult_basic : PRICE.adult_full);
+  // find row by group & hours
+  const row = map.find(r=> r[0].startsWith(group+" "+hours+"hr"));
+  if(!row) return Infinity;
+  const price = parseFloat(row[1].replace(/[^0-9.]/g,''));
+  if(row[1].includes('/人')) return price; // per person
+  // /共 → divide by group size
+  const divisor = group==='1v2'?2 : group==='1v3'?3 : 4;
+  return price/divisor;
+}
+function adjustGroupByBudget(tier, group, budget){
+  const order=['1v1','1v2','1v3','1v4'];
+  const bandMax = { b1:900, b2:1500, b3:2000, b4:99999 }[budget||'b4'];
+  let g=group;
+  const baseHours = (g==='1v1' || g==='1v2')? 10 : 15;
+  if(perPersonPrice(tier,g,baseHours) <= bandMax) return g;
+  let idx = order.indexOf(g);
+  while(idx < order.length-1){
+    idx++; g = order[idx];
+    const hours = (g==='1v1' || g==='1v2')? 10 : 15;
+    if(perPersonPrice(tier,g,hours) <= bandMax) return g;
+  }
+  return group;
+}
+function chooseHours(freq, group){
+  if((group==='1v1'||group==='1v2') && (S.freq==='f2' || S.freq==='f3')) return 20;
+  return (group==='1v3' || group==='1v4')? 15 : 10;
+}
+function tierFromAdultLevel(){
+  return S.a_level==='zero'? 'zero' : (S.a_level==='basic'? 'basic' : 'full');
+}
+
+function buildAdultRecommendation(){
+  const tier = tierFromAdultLevel();
+  let group = S.group || '1v2';
+  if(isPeak(S.sched) && group==='1v1' && S.join!=='j_none') group = '1v2';
+  group = adjustGroupByBudget(tier, group, S.budget);
+  const hours = chooseHours(S.freq, group);
+  // locate rows for display
+  const priceTable = tier==='zero'? PRICE.adult_zero : (tier==='basic'? PRICE.adult_basic : PRICE.adult_full);
+  const findRow = (g,h)=> priceTable.find(r=> r[0].startsWith(g+" "+h+"hr"));
+  const main = findRow(group, hours);
+  const cheaperGroup = group==='1v1'? '1v2' : group==='1v2'? '1v3' : '1v4';
+  const alt = findRow(cheaperGroup, chooseHours(S.freq, cheaperGroup));
+  // upsell: 20hr(若可) 或提示充值
+  let up = null;
+  if(group==='1v1' || group==='1v2'){
+    up = findRow(group, 20) || ['VIP 充值','$3000/单位',''];
+  } else {
+    up = ['VIP 充值','$3000/单位',''];
+  }
+  return { tier, main, alt, up, tips: [ isPeak(S.sched)? 'tip_peak': null, S.join!=='j_none'? 'tip_group': null ].filter(Boolean) };
+}
+
+function buildKidsRecommendation(){
+  if(S.k_mode==='flex'){
+    const g = S.k_group || '1v2';
+    const hours = (g==='1v1'||g==='1v2')? 10 : 15;
+    const table = PRICE.kid_flex;
+    const findRow=(g,h)=> table.find(r=> r[0].startsWith(g+" "+h+"hr"));
+    const main = findRow(g, hours);
+    const alt = (g==='1v1')? findRow('1v2',10) : findRow('1v4',15);
+    const up  = (g==='1v1'||g==='1v2')? findRow('1v1',10) : findRow('1v3',15);
+    return { mode:'flex', main, alt, up, tips:[ S.k_join!=='j_none'? 'tip_group': null ].filter(Boolean) };
+  } else { // longterm
+    const g = S.k_group || '1v2';
+    const freqMap = { f1:'1pw', f2:'2pw', f3:'3pw' };
+    const term = S.k_term || '25';
+    const freq = freqMap[S.k_freq||'f1'];
+    const row = K_LT[g][freq][term];
+    // cheaper: bigger group
+    const cheaperG = g==='1v1'? '1v2' : g==='1v2'? '1v3' : '1v4-6';
+    const alt = K_LT[cheaperG][freq][term];
+    // up: longer term 50 or tighter group
+    let up = K_LT[g][freq]['50'];
+    if(!up && g==='1v4-6') up = K_LT['1v3'][freq][term];
+    return { mode:'lt', main:[''+g+' '+freq, row[0], row[1]], alt:[''+cheaperG+' '+freq, alt[0], alt[1]], up: up? [''+g+' '+freq, up[0], up[1]]: null, tips:[ S.k_join!=='j_none'? 'tip_group': null ].filter(Boolean) };
+  }
+}
+
+function recCard(title, row){
+  if(!row) return '';
+  return `<div class=card><div class=muted style="font-size:12px">${title}</div><div class=q>${row[0]}</div><div>$${row[1].replace(/[^0-9.]/g,'')? row[1]:row[0]}</div><div class=muted>${row[2]||''}</div></div>`;
+}
+
+// ===== RENDER =====
 function render(){
+  // language
   if(!S.lang){
-    $app.innerHTML = `<h1>${STR.en.title} / ${STR.zh.title}</h1>
-      <div class="q">${STR.en.lang}</div>
-      <div class="choices">${opt(STR.zh.zh,()=>{S.lang='zh';render()})}${opt(STR.en.en,()=>{S.lang='en';render()})}</div>`;return;
+    document.getElementById('app').innerHTML = `<h1>${STR.en.title} / ${STR.zh.title}</h1>
+      <div class=q>${STR.en.lang}</div>
+      <div class=choices>${opt(STR.zh.zh,()=>{S.lang='zh';render()})}${opt(STR.en.en,()=>{S.lang='en';render()})}</div>`;return;
   }
+  // audience
   if(!S.audience){
-    $app.innerHTML = `<h1>${t('title')}</h1>
-      <div class="q">${t('audience')}</div>
-      <div class="choices">${opt(t('adult'),()=>{S.audience='adult';render()})}${opt(t('child'),()=>{S.audience='child';render()})}</div>
-      <div class="footer"><button class="btn" onclick="S.lang=null;render()">${t('back')}</button></div>`;return;
+    app.innerHTML = `<h1>${t('title')}</h1>
+      <div class=q>${t('audience')}</div>
+      <div class=choices>${opt(t('adult'),()=>{S.audience='adult';render()})}${opt(t('child'),()=>{S.audience='child';render()})}</div>
+      <div class=footer><button class=btn onclick="S.lang=null;render()">${t('back')}</button></div>`;return;
   }
+
+  // Adult flow with smart tiers
   if(S.audience==='adult'){
     if(!S.a_level){
-      $app.innerHTML = `<h1>${t('title')}</h1>
-        <div class="q">${t('a_level')}</div>
-        <div class="choices">${opt(t('zero'),()=>{S.a_level='zero';render()})}${opt(t('basic'),()=>{S.a_level='basic';render()})}${opt(t('inter'),()=>{S.a_level='inter';render()})}${opt(t('adv'),()=>{S.a_level='adv';render()})}</div>
-        <div class="footer"><button class="btn" onclick="S.audience=null;render()">${t('back')}</button></div>`;return;
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('a_level')}</div>
+        <div class=choices>${opt(t('zero'),()=>{S.a_level='zero';render()})}${opt(t('basic'),()=>{S.a_level='basic';render()})}${opt(t('inter'),()=>{S.a_level='inter';render()})}${opt(t('adv'),()=>{S.a_level='adv';render()})}</div>
+        <div class=footer><button class=btn onclick="S.audience=null;render()">${t('back')}</button></div>`;return;
     }
-    // 推荐 + 完整价目（成人三块）
-    const recText = S.a_level==='zero'? t('adult_zero') : (S.a_level==='basic'? t('adult_basic') : t('adult_full'));
-    $app.innerHTML = `<h1>${t('title')}</h1>
-      <div class="q">${t('rec')}</div>
-      <div class="card">${recText}</div>
-      <p class="muted">${t('tip_adult')}</p>
-      <div class="hr"></div>
-      <h3>${t('price_all')}</h3>
-      <div class="grid">
-        <div class="card"><div class="q">${t('adult_zero')}</div>${table(PRICE.adult_zero)}</div>
-        <div class="card"><div class="q">${t('adult_basic')}</div>${table(PRICE.adult_basic)}</div>
-        <div class="card"><div class="q">${t('adult_full')}</div>${table(PRICE.adult_full)}</div>
+    if(!S.group){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('group')}</div>
+        <div class=choices>${opt(t('g1'),()=>{S.group='1v1';render()})}${opt(t('g2'),()=>{S.group='1v2';render()})}${opt(t('g3'),()=>{S.group='1v3';render()})}${opt(t('g4'),()=>{S.group='1v4';render()})}</div>
+        <div class=footer><button class=btn onclick="S.a_level=null;render()">${t('back')}</button></div>`;return;
+    }
+    if(!S.join){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('join')}</div>
+        <div class=choices>${opt(t('j_bring'),()=>{S.join='j_bring';render()})}${opt(t('j_join'),()=>{S.join='j_join';render()})}${opt(t('j_none'),()=>{S.join='j_none';render()})}</div>
+        <div class=footer><button class=btn onclick="S.group=null;render()">${t('back')}</button></div>`;return;
+    }
+    if(!S.sched){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('sched')}</div>
+        <div class=choices>${opt(t('wd'),()=>{S.sched='wd';render()})}${opt(t('we'),()=>{S.sched='we';render()})}${opt(t('wk'),()=>{S.sched='wk';render()})}${opt(t('flex2'),()=>{S.sched='flex';render()})}</div>
+        <div class=footer><button class=btn onclick="S.join=null;render()">${t('back')}</button></div>`;return;
+    }
+    if(!S.freq){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('freq')}</div>
+        <div class=choices>${opt(t('f1'),()=>{S.freq='f1';render()})}${opt(t('f2'),()=>{S.freq='f2';render()})}${opt(t('f3'),()=>{S.freq='f3';render()})}</div>
+        <div class=footer><button class=btn onclick="S.sched=null;render()">${t('back')}</button></div>`;return;
+    }
+    if(!S.budget){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('budget')}</div>
+        <div class=choices>${opt(t('b1'),()=>{S.budget='b1';render()})}${opt(t('b2'),()=>{S.budget='b2';render()})}${opt(t('b3'),()=>{S.budget='b3';render()})}${opt(t('b4'),()=>{S.budget='b4';render()})}</div>
+        <div class=footer><button class=btn onclick="S.freq=null;render()">${t('back')}</button></div>`;return;
+    }
+    const rec = buildAdultRecommendation();
+    const tips = rec.tips.map(k=> `<span class=pill>${t(k)}</span>`).join(' ');
+    app.innerHTML = `<h1>${t('title')}</h1>
+      <div class=q>${t('rec')}</div>
+      <div class=recgrid>
+        ${recCard(t('main'), rec.main)}
+        ${recCard(t('alt'), rec.alt)}
+        ${recCard(t('up'), rec.up)}
       </div>
-      <div class="footer"><button class="btn" onclick="S.a_level=null;render()">${t('back')}</button><button class="btn primary" onclick="location.reload()">${t('restart')}</button></div>`;return;
+      ${tips? `<p class=muted style="margin-top:6px">${tips}</p>`:''}
+      <div class=hr></div>
+      <h3>${t('price_all')}</h3>
+      <div class=grid>
+        <div class=card><div class=q>${t('adult_zero')}</div>${table(PRICE.adult_zero)}</div>
+        <div class=card><div class=q>${t('adult_basic')}</div>${table(PRICE.adult_basic)}</div>
+        <div class=card><div class=q>${t('adult_full')}</div>${table(PRICE.adult_full)}</div>
+      </div>
+      <div class=footer><button class=btn onclick="S.budget=null;render()">${t('back')}</button><button class="btn primary" onclick="location.reload()">${t('restart')}</button></div>`;return;
   }
-  // U14
+
+  // Kids flow with smart prompts
   if(S.audience==='child'){
     if(!S.k_mode){
-      $app.innerHTML = `<h1>${t('title')}</h1>
-        <div class="q">${t('k_mode')}</div>
-        <div class="choices">${opt(t('flex'),()=>{S.k_mode='flex';render()})}${opt(t('longterm'),()=>{S.k_mode='longterm';render()})}</div>
-        <div class="footer"><button class="btn" onclick="S.audience=null;render()">${t('back')}</button></div>`;return;
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('k_mode')}</div>
+        <div class=choices>${opt(t('flex'),()=>{S.k_mode='flex';render()})}${opt(t('longterm'),()=>{S.k_mode='longterm';render()})}</div>
+        <div class=footer><button class=btn onclick="S.audience=null;render()">${t('back')}</button></div>`;return;
     }
-    const recText = S.k_mode==='flex'? t('kid_flex') : t('kid_lt');
-    $app.innerHTML = `<h1>${t('title')}</h1>
-      <div class="q">${t('rec')}</div>
-      <div class="card">${recText}</div>
-      <p class="muted">${t('tip_kid')}</p>
-      <div class="hr"></div>
-      <h3>${t('price_all')}</h3>
-      <div class="grid">
-        <div class="card"><div class="q">${t('kid_flex')}</div>${table(PRICE.kid_flex)}</div>
-        <div class="card"><div class="q">${t('kid_lt')}</div>${tableKLT()}</div>
+    if(!S.k_group){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('group')}</div>
+        <div class=choices>${opt(t('g1'),()=>{S.k_group='1v1';render()})}${opt(t('g2'),()=>{S.k_group='1v2';render()})}${opt(t('g3'),()=>{S.k_group='1v3';render()})}${opt(t('g46'),()=>{S.k_group='1v4-6';render()})}</div>
+        <div class=footer><button class=btn onclick="S.k_mode=null;render()">${t('back')}</button></div>`;return;
+    }
+    if(!S.k_join){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('join')}</div>
+        <div class=choices>${opt(t('j_bring'),()=>{S.k_join='j_bring';render()})}${opt(t('j_join'),()=>{S.k_join='j_join';render()})}${opt(t('j_none'),()=>{S.k_join='j_none';render()})}</div>
+        <div class=footer><button class=btn onclick="S.k_group=null;render()">${t('back')}</button></div>`;return;
+    }
+    if(!S.k_sched){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('sched')}</div>
+        <div class=choices>${opt(t('wd'),()=>{S.k_sched='wd';render()})}${opt(t('we'),()=>{S.k_sched='we';render()})}${opt(t('wk'),()=>{S.k_sched='wk';render()})}${opt(t('flex2'),()=>{S.k_sched='flex';render()})}</div>
+        <div class=footer><button class=btn onclick="S.k_join=null;render()">${t('back')}</button></div>`;return;
+    }
+    if(!S.k_freq){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('freq')}</div>
+        <div class=choices>${opt(t('f1'),()=>{S.k_freq='f1';render()})}${opt(t('f2'),()=>{S.k_freq='f2';render()})}${opt(t('f3'),()=>{S.k_freq='f3';render()})}</div>
+        <div class=footer><button class=btn onclick="S.k_sched=null;render()">${t('back')}</button></div>`;return;
+    }
+    if(S.k_mode==='flex' && !S.k_term){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('hours')}</div>
+        <div class=choices>${opt(t('h10'),()=>{S.k_term='10';render()})}${opt(t('h15'),()=>{S.k_term='15';render()})}</div>
+        <div class=footer><button class=btn onclick="S.k_freq=null;render()">${t('back')}</button></div>`;return;
+    }
+    if(S.k_mode==='longterm' && !S.k_term){
+      app.innerHTML = `<h1>${t('title')}</h1>
+        <div class=q>${t('hours')}</div>
+        <div class=choices>${opt(t('t25'),()=>{S.k_term='25';render()})}${opt(t('t50'),()=>{S.k_term='50';render()})}</div>
+        <div class=footer><button class=btn onclick="S.k_freq=null;render()">${t('back')}</button></div>`;return;
+    }
+    const rec = buildKidsRecommendation();
+    const tips = rec.tips.map(k=> `<span class=pill>${t(k)}</span>`).join(' ');
+    app.innerHTML = `<h1>${t('title')}</h1>
+      <div class=q>${t('rec')}</div>
+      <div class=recgrid>
+        ${recCard(t('main'), rec.main)}
+        ${recCard(t('alt'), rec.alt)}
+        ${recCard(t('up'), rec.up)}
       </div>
-      <div class="footer"><button class="btn" onclick="S.k_mode=null;render()">${t('back')}</button><button class="btn primary" onclick="location.reload()">${t('restart')}</button></div>`;return;
+      ${tips? `<p class=muted style="margin-top:6px">${tips}</p>`:''}
+      <div class=hr></div>
+      <h3>${t('price_all')}</h3>
+      <div class=grid>
+        <div class=card><div class=q>${t('kid_flex')}</div>${table(PRICE.kid_flex)}</div>
+        <div class=card><div class=q>${t('kid_lt')}</div>${tableKLT()}</div>
+      </div>
+      <div class=footer><button class=btn onclick="S.k_term=null;render()">${t('back')}</button><button class="btn primary" onclick="location.reload()">${t('restart')}</button></div>`;return;
   }
 }
 
