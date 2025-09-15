@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Xanadu Course Recommender · v2 (Standalone)</title>
+<style>
+  :root{
+    --bg:#0f1020; --card:#191a2e; --text:#e9ecf1; --muted:#a9afc3; --brand:#7c3aed; --ok:#10b981; --warn:#f59e0b; --bad:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial; background:linear-gradient(180deg,#0f1020,#12122a); color:var(--text);}
+  .container{max-width:920px;margin:0 auto;padding:24px}
+  header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .logo{font-weight:800;letter-spacing:.3px}
+  .badge{background:#ffffff16;border:1px solid #ffffff24;border-radius:12px;padding:4px 10px;font-size:12px;color:var(--muted)}
+  .card{background:var(--card); border:1px solid #282a42; border-radius:16px; padding:18px; box-shadow:0 6px 24px #00000040;}
+  .question{margin:12px 0 6px; font-weight:700}
+  .muted{color:var(--muted)}
+  .choices{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin:10px 0 6px}
+  button,optgroup,select,input,textarea{font:inherit}
+  .btn{border:none; border-radius:12px; padding:10px 12px; background:#2a2b48; color:var(--text); cursor:pointer; transition:transform .02s ease, background .2s ease;}
+  .btn:hover{background:#34355a}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--brand);}
+  .btn-primary:hover{filter:brightness(1.05)}
+  .btn-ghost{background:transparent; border:1px solid #3a3b5e}
+  .opt{padding:12px;border-radius:12px;border:1px solid #3a3b5e;background:#1a1b32;cursor:pointer}
+  .opt.selected{border-color:var(--brand); box-shadow:0 0 0 2px #7c3aed55 inset}
+  .row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .hidden{display:none !important}
+  .rec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #3a3b5e;color:var(--muted);font-size:12px;margin-right:6px}
+  .hr{height:1px;background:#2a2b48;margin:14px 0}
+  input[type="text"],input[type="email"],input[type="tel"],textarea,select{width:100%;background:#14152a;color:var(--text);border:1px solid #2f3152;border-radius:12px;padding:10px 12px}
+  textarea{min-height:90px}
+  .footer{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+  .kbd{font-family:ui-monospace, Menlo, Monaco, "Cascadia Mono", monospace; background:#00000033; border:1px solid #ffffff22; padding:2px 6px; border-radius:6px}
+  .mono{font-family:ui-monospace, Menlo, Monaco, "Cascadia Mono", monospace; font-size:12px}
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">Toronto <span style="color:#f59e0b">X</span>anadu Tennis</div>
+      <div class="badge">Recommender · v2 (test)</div>
+    </header>
+
+    <div class="card" id="app">
+      <!-- dynamic content goes here -->
+    </div>
+
+    <p class="muted mono" id="debug" style="margin-top:10px"></p>
+  </div>
+
+<script>
+/* ========= DATA ========= */
+const i18n = {
+  zh: {
+    start: "请选择语言",
+    cnTeach: "您更偏好哪种教学语言？",
+    cn: "中文", en: "英文", both:"都可以",
+    audience: "为自己还是为孩子报名？",
+    adult:"成人(14+)", child:"儿童U14",
+    a_level:"您目前的网球水平？",
+    k_mode:"选择上课模式",
+    mode_flex:"短期Flex（10–15小时）", mode_lt:"长期固定（半年/一年）",
+    k_level:"孩子目前水平？",
+    goals:"主要训练目标（可多选）",
+    group:"更偏好的上课人数？",
+    join:"是否可自带队友或接受拼班？",
+    j_bring:"我能带1–3位朋友", j_join:"愿意拼班（由我们匹配）", j_none:"都不方便",
+    sched:"时间偏好",
+    weekday_day:"工作日白天", weekday_eve:"工作日晚间", weekend:"周末", flex:"都可以",
+    freq:"每周计划上课频率",
+    budget:"预算倾向（10–20小时参考）",
+    next:"下一步", back:"上一步", submit:"提交信息", restart:"重新开始",
+    hours:"请选择课时/学期",
+    hours10:"10小时", hours15:"15小时", term25:"半年(25周)", term50:"一年(50周)",
+    recommend:"为您生成的推荐",
+    main:"主推荐", alt:"经济备选", up:"进阶升级",
+    contact:"请留下联系方式以便教练联系您",
+    name:"姓名", phone:"手机号", email:"邮箱", wechat:"微信号(可选)", notes:"备注(可填孩子年龄/可用时间)",
+    tryout:"可预约试课", vip:"或选择VIP储值：每$3000为一个单位",
+  },
+  en: {
+    start: "Choose your language",
+    cnTeach: "Preferred teaching language",
+    cn: "Chinese", en: "English", both:"Both",
+    audience: "Are you signing up for yourself or your child?",
+    adult:"Adult (14+)", child:"Child (U14)",
+    a_level:"Your current tennis level?",
+    k_mode:"Choose course mode",
+    mode_flex:"Short-term Flex (10–15h)", mode_lt:"Long-term weekly (Half-year/Year)",
+    k_level:"Child level?",
+    goals:"Main goals (select all that apply)",
+    group:"Preferred class size?",
+    join:"Can you bring friends or join a matched group?",
+    j_bring:"I can bring 1–3 friends", j_join:"Happy to be matched", j_none:"Prefer not",
+    sched:"Schedule preference",
+    weekday_day:"Weekday daytime", weekday_eve:"Weekday evening", weekend:"Weekend", flex:"Flexible",
+    freq:"Sessions per week",
+    budget:"Budget preference (per 10–20 hours)",
+    next:"Next", back:"Back", submit:"Submit", restart:"Restart",
+    hours:"Please choose hours/term",
+    hours10:"10 hours", hours15:"15 hours", term25:"Half-year (25 weeks)", term50:"Full-year (50 weeks)",
+    recommend:"Your recommendations",
+    main:"Top match", alt:"Budget option", up:"Upgrade",
+    contact:"Leave your contact so a coach can reach you",
+    name:"Full Name", phone:"Phone", email:"Email", wechat:"WeChat (optional)", notes:"Notes (availability, age, etc.)",
+    tryout:"Trial lesson available", vip:"Or VIP top-up: $3000 per unit",
+  }
+};
+
+// Price maps from the canvas spec
+const PACKAGES = {
+  // Adults
+  A:{
+    ZB:{ // red court (zero)
+      '1v1': { '10': {id:'A-ZB-1v1-10', price:800, unit:'/person', tryout:100}, '20':{id:'A-ZB-1v1-20', price:1550, unit:'/person', note:'95%'} },
+      '1v2': { '10': {id:'A-ZB-1v2-10', price:1000, unit:'/group', tryout:140}, '20':{id:'A-ZB-1v2-20', price:1900, unit:'/group'} },
+      '1v3': { '15': {id:'A-ZB-1v3-15', price:1500, unit:'/group', tryout:240} },
+      '1v4': { '15': {id:'A-ZB-1v4-15', price:1800, unit:'/group', tryout:280} }
+    },
+    HC:{ // half court (basic -> skill)
+      '1v1': { '10': {id:'A-HC-1v1-10', price:900, unit:'/person', tryout:110}, '20':{id:'A-HC-1v1-20', price:1710, unit:'/person'} },
+      '1v2': { '10': {id:'A-HC-1v2-10', price:1250, unit:'/group', tryout:150}, '20':{id:'A-HC-1v2-20', price:2375, unit:'/group'} },
+      '1v3': { '15': {id:'A-HC-1v3-15', price:1500, unit:'/group', tryout:240} },
+      '1v4': { '15': {id:'A-HC-1v4-15', price:1800, unit:'/group', tryout:280} }
+    },
+    FC:{ // full court (intermediate/advanced)
+      '1v1': { '10': {id:'A-FC-1v1-10', price:1300, unit:'/person', tryout:140}, '20':{id:'A-FC-1v1-20', price:2470, unit:'/person'} },
+      '1v2': { '10': {id:'A-FC-1v2-10', price:1500, unit:'/group', tryout:160}, '20':{id:'A-FC-1v2-20', price:2850, unit:'/group'} },
+      '1v3': { '15': {id:'A-FC-1v3-15', price:2400, unit:'/group', tryout:270} },
+      '1v4': { '15': {id:'A-FC-1v4-15', price:2800, unit:'/group', tryout:320} }
+    },
+    VIP:{ id:'A-VIP-UNIT', price:3000, unit:'per top-up' }
+  },
+  // Kids U14
+  K:{
+    FLEX:{
+      '1v1': { '10': {id:'K-FLEX-1v1-10', price:900, unit:'/person', tryout:100} },
+      '1v2': { '10': {id:'K-FLEX-1v2-10', price:1250, unit:'/group', tryout:140} },
+      '1v3': { '15': {id:'K-FLEX-1v3-15', price:500, unit:'/person', tryout:240} },
+      '1v4': { '15': {id:'K-FLEX-1v4-15', price:450, unit:'/person', tryout:280} },
+    },
+    LT:{ // long term, show total per term
+      // structure: group -> freq(1pw/2pw/3pw) -> term(25/50)
+      '1v1': {
+        '1pw': {'25':{id:'K-LT-1v1-1pw-25', price:1875, hr:75}, '50':{id:'K-LT-1v1-1pw-50', price:3600, hr:72}},
+        '2pw': {'25':{id:'K-LT-1v1-2pw-25', price:3550, hr:71}, '50':{id:'K-LT-1v1-2pw-50', price:6700, hr:67}},
+        '3pw': {'25':{id:'K-LT-1v1-3pw-25', price:4875, hr:65}, '50':{id:'K-LT-1v1-3pw-50', price:9300, hr:62}},
+      },
+      '1v2': {
+        '1pw': {'25':{id:'K-LT-1v2-1pw-25', price:2375, hr:95}, '50':{id:'K-LT-1v2-1pw-50', price:4600, hr:92}},
+        '2pw': {'25':{id:'K-LT-1v2-2pw-25', price:4550, hr:91}, '50':{id:'K-LT-1v2-2pw-50', price:8700, hr:87}},
+        '3pw': {'25':{id:'K-LT-1v2-3pw-25', price:6375, hr:85}, '50':{id:'K-LT-1v2-3pw-50', price:12100, hr:80.67}},
+      },
+      '1v3': {
+        '1pw': {'25':{id:'K-LT-1v3-1pw-25', price:3000, hr:120}, '50':{id:'K-LT-1v3-1pw-50', price:5850, hr:117}},
+        '2pw': {'25':{id:'K-LT-1v3-2pw-25', price:5750, hr:115}, '50':{id:'K-LT-1v3-2pw-50', price:11000, hr:110}},
+        '3pw': {'25':{id:'K-LT-1v3-3pw-25', price:8025, hr:107}, '50':{id:'K-LT-1v3-3pw-50', price:15500, hr:103.33}},
+      },
+      '1v4-6': {
+        '1pw': {'25':{id:'K-LT-1v4-6-1pw-25', price:3650, hr:146}, '50':{id:'K-LT-1v4-6-1pw-50', price:7150, hr:143}},
+        '2pw': {'25':{id:'K-LT-1v4-6-2pw-25', price:7050, hr:141}, '50':{id:'K-LT-1v4-6-2pw-50', price:13650, hr:136.5}},
+        '3pw': {'25':{id:'K-LT-1v4-6-3pw-25', price:10050, hr:134}, '50':{id:'K-LT-1v4-6-3pw-50', price:19500, hr:130}},
+      },
+    }
+  }
+};
+
+/* ========= STATE ========= */
+const state = {
+  lang:null, teach_lang:null,
+  audience:null,
+  // adult
+  a_level:null, goals:[], group:null, join:null, sched:null, freq:null, budget:null,
+  // kids
+  k_mode:null, k_level:null, k_group:null, k_join:null, k_sched:null, k_freq:null, k_term:null,
+  // output
+  recommendation:null,
+};
+
+/* ========= UTILS ========= */
+const $app = document.getElementById('app');
+const t = () => i18n[state.lang || 'en'];
+const set = (k,v)=>{state[k]=v; render()};
+const toggle = (arr,val)=>{ const i=arr.indexOf(val); if(i>-1)arr.splice(i,1); else arr.push(val); render(); };
+const isPeak = (sched)=> (sched==='weekday-evening' || sched==='weekend');
+
+function pricePerPerson(tier, group, hours){
+  const pkg=PACKAGES.A[tier]?.[group]?.[hours]; if(!pkg) return Infinity;
+  if(pkg.unit==='/person') return pkg.price;
+  const divisor = group==='1v2'?2 : group==='1v3'?3 : 4;
+  return pkg.price/divisor;
+}
+
+function adjustGroupByBudget(tier, group, budgetBand){
+  const order=['1v1','1v2','1v3','1v4'];
+  const bandMax = { '<900':900, '900–1500':1500, '1500–2000':2000, '>2000':99999 }[budgetBand||'>2000'];
+  let g=group; // try chosen first (10 or 20/15 hrs heuristic)
+  const hours = (group==='1v1' || group==='1v2')? '10':'15';
+  let p=pricePerPerson(tier,g,hours);
+  if(p<=bandMax) return g;
+  // expand group until affordable
+  let idx=order.indexOf(g);
+  while(idx<order.length-1){
+    idx++; g=order[idx]; p=pricePerPerson(tier,g, g==='1v1'||g==='1v2'?'10':'15');
+    if(p<=bandMax) return g;
+  }
+  return group; // fallback
+}
+
+function chooseHours(freq, tier, group){
+  if((group==='1v1'||group==='1v2') && (freq==='2x'||freq==='3x+')) return '20';
+  if(group==='1v3' || group==='1v4') return '15';
+  return '10';
+}
+
+function primaryAdultRecommendation(){
+  const tier = state.a_level==='zero' ? 'ZB' : (state.a_level==='basic' ? 'HC' : 'FC');
+  let group = state.group || '1v2';
+  if(isPeak(state.sched) && group==='1v1' && state.join!=='none'){
+    group = '1v2';
+  }
+  group = adjustGroupByBudget(tier, group, state.budget);
+  const hours = chooseHours(state.freq, tier, group);
+  const main = PACKAGES.A[tier]?.[group]?.[hours];
+  // budget alternative (bigger group same tier)
+  const cheaper = (g=>PACKAGES.A[tier]?.[g]?.[chooseHours(state.freq,tier,g)])(group==='1v1'?'1v2': group==='1v2'?'1v3':'1v4');
+  // upsell (20h or VIP)
+  let upsell=null;
+  if(group==='1v1' || group==='1v2') upsell = PACKAGES.A[tier]?.[group]?.['20'] || PACKAGES.A.VIP;
+  else upsell = PACKAGES.A.VIP;
+  return { tier, group, hours, main, cheaper, upsell };
+}
+
+function primaryKidsRecommendation(){
+  if(state.k_mode==='flex'){
+    const hours = state.k_group==='1v1' || state.k_group==='1v2' ? '10' : '15';
+    const main = PACKAGES.K.FLEX[state.k_group]?.[hours];
+    const cheaper = (state.k_group==='1v1')? PACKAGES.K.FLEX['1v2']?.['10'] : (state.k_group==='1v2')? PACKAGES.K.FLEX['1v4']?.['15'] : PACKAGES.K.FLEX['1v4']?.['15'];
+    const upsell  = (state.k_group==='1v1' || state.k_group==='1v2')? PACKAGES.K.FLEX['1v1']?.['10'] : PACKAGES.K.FLEX['1v3']?.['15'];
+    return {mode:'FLEX', main, cheaper, upsell};
+  } else {
+    const freqMap={ '1x':'1pw', '2x':'2pw', '3x+':'3pw' };
+    const main = PACKAGES.K.LT[state.k_group]?.[freqMap[state.k_freq]]?.[state.k_term || '25'];
+    // budget: increase group size (if possible) same freq/term
+    let cheaper=null;
+    if(state.k_group==='1v1') cheaper = PACKAGES.K.LT['1v2']?.[freqMap[state.k_freq]]?.[state.k_term||'25'];
+    else if(state.k_group==='1v2') cheaper = PACKAGES.K.LT['1v3']?.[freqMap[state.k_freq]]?.[state.k_term||'25'];
+    else cheaper = PACKAGES.K.LT['1v4-6']?.[freqMap[state.k_freq]]?.[state.k_term||'25'];
+    // upsell: longer term 50 or smaller group
+    let upsell = PACKAGES.K.LT[state.k_group]?.[freqMap[state.k_freq]]?.['50'] || null;
+    if(!upsell){ // try tighter group
+      if(state.k_group==='1v4-6') upsell = PACKAGES.K.LT['1v3']?.[freqMap[state.k_freq]]?.[state.k_term||'25'];
+    }
+    return {mode:'LT', main, cheaper, upsell};
+  }
+}
+
+/* ========= RENDER ========= */
+function hOpt(key, label, selected, onClick){
+  return `<div class="opt ${selected? 'selected':''}" onclick="(${onClick})()">${label}</div>`;
+}
+
+function actions(prev, nextLabel, next){
+  return `<div class="footer">
+    ${prev? `<button class="btn btn-ghost" onclick="(${prev})()">${t().back}</button>`:''}
+    ${next? `<button class="btn btn-primary" onclick="(${next})()">${nextLabel||t().next}</button>`:''}
+  </div>`;
+}
+
+function render(){
+  const tr=t();
+  // Step routing
+  if(!state.lang){
+    $app.innerHTML = `
+      <div class="question">${i18n.en.start} / ${i18n.zh.start}</div>
+      <div class="choices">
+        ${hOpt('lang','中文',false,()=>set('lang','zh'))}
+        ${hOpt('lang','English',false,()=>set('lang','en'))}
+      </div>`; return;
+  }
+  // zh teaching language step
+  if(state.lang==='zh' && !state.teach_lang){
+    $app.innerHTML = `
+      <div class="question">${tr.cnTeach}</div>
+      <div class="choices">
+        ${hOpt('cn','中文授课',state.teach_lang==='cn',()=>set('teach_lang','cn'))}
+        ${hOpt('en','英文授课',state.teach_lang==='en',()=>set('teach_lang','en'))}
+        ${hOpt('both','都可以',state.teach_lang==='both',()=>set('teach_lang','both'))}
+      </div>
+      ${actions(()=>{state.lang=null;state.teach_lang=null;render()}, tr.next, ()=>set('teach_lang',state.teach_lang||'both'))}`;
+    return;
+  }
+  if(!state.audience){
+    $app.innerHTML = `
+      <div class="question">${tr.audience}</div>
+      <div class="choices">
+        ${hOpt('adult',tr.adult,false,()=>set('audience','adult'))}
+        ${hOpt('child',tr.child,false,()=>set('audience','u14'))}
+      </div>
+      ${actions(()=>{ if(state.lang==='zh'){state.teach_lang=null;} state.lang=null; }, null, null)}`; return;
+  }
+
+  // Adult flow
+  if(state.audience==='adult'){
+    if(!state.a_level){
+      $app.innerHTML = `
+        <div class="question">${tr.a_level}</div>
+        <div class="choices">
+          ${hOpt('zero','零基础 / True beginner',false,()=>set('a_level','zero'))}
+          ${hOpt('basic','有基础未系统 / Some basics',false,()=>set('a_level','basic'))}
+          ${hOpt('intermediate','能对打/发球 / Can rally & serve',false,()=>set('a_level','intermediate'))}
+          ${hOpt('advanced','能比赛 / Match-ready',false,()=>set('a_level','advanced'))}
+        </div>
+        ${actions(()=>{state.audience=null;}, null, null)}`; return;
+    }
+    if(!state.goals || state.goals.length===0){
+      const add=(v)=>()=>toggle(state.goals,v);
+      $app.innerHTML = `
+        <div class="question">${tr.goals}</div>
+        <div class="choices">
+          ${hOpt('fitness','健身/乐趣 fitness',state.goals.includes('fitness'),add('fitness'))}
+          ${hOpt('technique','技术提升 technique',state.goals.includes('technique'),add('technique'))}
+          ${hOpt('match','对抗/战术 match',state.goals.includes('match'),add('match'))}
+          ${hOpt('fast','短期速成 fast',state.goals.includes('fast'),add('fast'))}
+          ${hOpt('social','社交 social',state.goals.includes('social'),add('social'))}
+        </div>
+        ${actions(()=>{state.a_level=null;}, tr.next, ()=>render())}`; return;
+    }
+    if(!state.group){
+      $app.innerHTML = `
+        <div class="question">${tr.group}</div>
+        <div class="choices">
+          ${hOpt('1v1','1v1',false,()=>set('group','1v1'))}
+          ${hOpt('1v2','1v2',false,()=>set('group','1v2'))}
+          ${hOpt('1v3','1v3',false,()=>set('group','1v3'))}
+          ${hOpt('1v4','1v4',false,()=>set('group','1v4'))}
+        </div>
+        ${actions(()=>{state.goals=[];}, null, null)}`; return;
+    }
+    if(!state.join){
+      $app.innerHTML = `
+        <div class="question">${tr.join}</div>
+        <div class="choices">
+          ${hOpt('bring',tr.j_bring,false,()=>set('join','bring'))}
+          ${hOpt('join',tr.j_join,false,()=>set('join','join'))}
+          ${hOpt('none',tr.j_none,false,()=>set('join','none'))}
+        </div>
+        ${actions(()=>{state.group=null;}, null, null)}`; return;
+    }
+    if(!state.sched){
+      $app.innerHTML = `
+        <div class="question">${tr.sched}</div>
+        <div class="choices">
+          ${hOpt('weekday-day',tr.weekday_day,false,()=>set('sched','weekday-day'))}
+          ${hOpt('weekday-evening',tr.weekday_eve,false,()=>set('sched','weekday-evening'))}
+          ${hOpt('weekend',tr.weekend,false,()=>set('sched','weekend'))}
+          ${hOpt('flex',tr.flex,false,()=>set('sched','flex'))}
+        </div>
+        ${actions(()=>{state.join=null;}, null, null)}`; return;
+    }
+    if(!state.freq){
+      $app.innerHTML = `
+        <div class="question">${tr.freq}</div>
+        <div class="choices">
+          ${hOpt('1x','1×/周',false,()=>set('freq','1x'))}
+          ${hOpt('2x','2×/周',false,()=>set('freq','2x'))}
+          ${hOpt('3x+','3×+/周',false,()=>set('freq','3x+'))}
+        </div>
+        ${actions(()=>{state.sched=null;}, null, null)}`; return;
+    }
+    if(!state.budget){
+      $app.innerHTML = `
+        <div class="question">${tr.budget}</div>
+        <div class="choices">
+          ${hOpt('<900','<$900',false,()=>set('budget','<900'))}
+          ${hOpt('900–1500','$900–$1500',false,()=>set('budget','900–1500'))}
+          ${hOpt('1500–2000','$1500–$2000',false,()=>set('budget','1500–2000'))}
+          ${hOpt('>2000','>$2000',false,()=>set('budget','>2000'))}
+        </div>
+        ${actions(()=>{state.freq=null;}, null, null)}`; return;
+    }
+    // compute
+    const rec = primaryAdultRecommendation();
+    state.recommendation = rec;
+    $app.innerHTML = renderRecommendations(rec);
+    return;
+  }
+
+  // Kids flow
+  if(state.audience==='u14'){
+    if(!state.k_mode){
+      $app.innerHTML = `
+        <div class="question">${tr.k_mode}</div>
+        <div class="choices">
+          ${hOpt('flex',tr.mode_flex,false,()=>set('k_mode','flex'))}
+          ${hOpt('lt',tr.mode_lt,false,()=>set('k_mode','longterm'))}
+        </div>
+        ${actions(()=>{state.audience=null;}, null, null)}`; return;
+    }
+    if(!state.k_level){
+      $app.innerHTML = `
+        <div class="question">${tr.k_level}</div>
+        <div class="choices">
+          ${hOpt('zero','零基础 / True beginner',false,()=>set('k_level','zero'))}
+          ${hOpt('basic','有基础未系统 / Some basics',false,()=>set('k_level','basic'))}
+          ${hOpt('intermediate','能对打/发球 / Can rally & serve',false,()=>set('k_level','intermediate'))}
+          ${hOpt('advanced','高水平 / Advanced',false,()=>set('k_level','advanced'))}
+        </div>
+        ${actions(()=>{state.k_mode=null;}, null, null)}`; return;
+    }
+    if(!state.k_group){
+      $app.innerHTML = `
+        <div class="question">${tr.group}</div>
+        <div class="choices">
+          ${hOpt('1v1','1v1',false,()=>set('k_group','1v1'))}
+          ${hOpt('1v2','1v2',false,()=>set('k_group','1v2'))}
+          ${hOpt('1v3','1v3',false,()=>set('k_group','1v3'))}
+          ${hOpt('1v4-6','1v4–6',false,()=>set('k_group','1v4-6'))}
+        </div>
+        ${actions(()=>{state.k_level=null;}, null, null)}`; return;
+    }
+    if(!state.k_join){
+      $app.innerHTML = `
+        <div class="question">${tr.join}</div>
+        <div class="choices">
+          ${hOpt('bring',tr.j_bring,false,()=>set('k_join','bring'))}
+          ${hOpt('join',tr.j_join,false,()=>set('k_join','join'))}
+          ${hOpt('none',tr.j_none,false,()=>set('k_join','none'))}
+        </div>
+        ${actions(()=>{state.k_group=null;}, null, null)}`; return;
+    }
+    if(!state.k_sched){
+      $app.innerHTML = `
+        <div class="question">${tr.sched}</div>
+        <div class="choices">
+          ${hOpt('weekday-day',tr.weekday_day,false,()=>set('k_sched','weekday-day'))}
+          ${hOpt('weekday-evening',tr.weekday_eve,false,()=>set('k_sched','weekday-evening'))}
+          ${hOpt('weekend',tr.weekend,false,()=>set('k_sched','weekend'))}
+          ${hOpt('flex',tr.flex,false,()=>set('k_sched','flex'))}
+        </div>
+        ${actions(()=>{state.k_join=null;}, null, null)}`; return;
+    }
+    if(!state.k_freq){
+      $app.innerHTML = `
+        <div class="question">${tr.freq}</div>
+        <div class="choices">
+          ${hOpt('1x','1×/周',false,()=>set('k_freq','1x'))}
+          ${hOpt('2x','2×/周',false,()=>set('k_freq','2x'))}
+          ${hOpt('3x+','3×+/周',false,()=>set('k_freq','3x+'))}
+        </div>
+        ${actions(()=>{state.k_sched=null;}, null, null)}`; return;
+    }
+    if(state.k_mode==='flex' && !state.k_term){
+      $app.innerHTML = `
+        <div class="question">${tr.hours}</div>
+        <div class="choices">
+          ${hOpt('10',tr.hours10,false,()=>set('k_term','10'))}
+          ${hOpt('15',tr.hours15,false,()=>set('k_term','15'))}
+        </div>
+        ${actions(()=>{state.k_freq=null;}, null, null)}`; return;
+    }
+    if(state.k_mode==='longterm' && !state.k_term){
+      $app.innerHTML = `
+        <div class="question">${tr.hours}</div>
+        <div class="choices">
+          ${hOpt('25',tr.term25,false,()=>set('k_term','25'))}
+          ${hOpt('50',tr.term50,false,()=>set('k_term','50'))}
+        </div>
+        ${actions(()=>{state.k_freq=null;}, null, null)}`; return;
+    }
+    const rec = primaryKidsRecommendation();
+    state.recommendation = rec;
+    $app.innerHTML = renderRecommendations(rec);
+    return;
+  }
+}
+
+function renderRecommendations(rec){
+  const tr=t();
+  const tips = (state.audience==='adult')
+    ? (isPeak(state.sched) && state.join!=='none' ? (state.lang==='zh' ? '高峰期多人班更易排期、均摊更省' : 'During peak hours, group classes schedule faster and cost less per person') : '')
+    : (state.k_join!=='none' ? (state.lang==='zh' ? '自组/拼班可更快开班' : 'Self-organized or matched groups start sooner') : '');
+  const contactForm = renderContactForm();
+  const card = (title,p)=> p? `<div class="card">
+    <div class="muted" style="font-size:12px">${title}</div>
+    <div style="font-weight:700;margin-top:4px">${p.id}</div>
+    <div style="margin-top:6px">$${p.price} <span class="muted">${p.unit||''}</span></div>
+    ${p.hr? `<div class="muted" style="margin-top:4px">~$${p.hr}/hr</div>`:''}
+    ${p.note? `<div class="pill">${p.note}</div>`:''}
+    ${p.tryout? `<div class="pill">${tr.tryout}: $${p.tryout}</div>`:''}
+  </div>`: '';
+
+  const grid = `<div class="rec-grid">
+    ${card(tr.main, rec.main)}
+    ${card(tr.alt, rec.cheaper)}
+    ${card(tr.up, rec.upsell)}
+  </div>`;
+
+  const restartBtn = `<button class="btn" onclick="location.reload()">${tr.restart}</button>`;
+  const vip = (state.audience==='adult')? `<p class="muted" style="margin-top:8px">${tr.vip}</p>`: '';
+
+  return `
+    <div class="question">${tr.recommend}</div>
+    ${tips? `<p class="muted">${tips}</p>`:''}
+    ${grid}
+    ${vip}
+    <div class="hr"></div>
+    ${contactForm}
+    <div class="footer">${restartBtn}</div>
+  `;
+}
+
+function renderContactForm(){
+  const tr=t();
+  const zh = state.lang==='zh';
+  return `
+    <div class="question">${tr.contact}</div>
+    <div class="row">
+      <div><label>${tr.name}<br/><input id="c_name" type="text" required></label></div>
+      <div><label>${tr.phone}<br/><input id="c_phone" type="tel" required></label></div>
+    </div>
+    <div class="row">
+      <div><label>${tr.email}<br/><input id="c_email" type="email" required></label></div>
+      ${zh? `<div><label>${tr.wechat}<br/><input id="c_wechat" type="text"></label></div>` : '<div></div>'}
+    </div>
+    <div style="margin-top:10px"><label>${tr.notes}<br/><textarea id="c_notes"></textarea></label></div>
+    <div class="footer">
+      <button class="btn btn-primary" onclick="submitLead()">${tr.submit}</button>
+    </div>
+  `;
+}
+
+function submitLead(){
+  // For the test version we just print the payload and allow download as JSON
+  const payload = {
+    lang: state.lang,
+    teach_lang: state.lang==='zh'? state.teach_lang : null,
+    audience: state.audience,
+    level: state.audience==='adult'? state.a_level : state.k_level,
+    goals: state.audience==='adult'? state.goals : [],
+    group_pref: state.audience==='adult'? state.group : state.k_group,
+    join_or_bring: state.audience==='adult'? state.join : state.k_join,
+    schedule: state.audience==='adult'? state.sched : state.k_sched,
+    frequency: state.audience==='adult'? state.freq : state.k_freq,
+    mode: state.audience==='u14'? state.k_mode : null,
+    term_or_hours: state.audience==='u14'? state.k_term : (state.recommendation?.hours||null),
+    budget: state.budget || null,
+    recommend_main: state.recommendation?.main?.id || null,
+    recommend_budget: state.recommendation?.cheaper?.id || null,
+    recommend_upsell: state.recommendation?.upsell?.id || null,
+    name: document.getElementById('c_name').value.trim(),
+    phone: document.getElementById('c_phone').value.trim(),
+    email: document.getElementById('c_email').value.trim(),
+    wechat: (document.getElementById('c_wechat')||{value:''}).value.trim(),
+    notes: document.getElementById('c_notes').value.trim(),
+    timestamp: new Date().toISOString(),
+  };
+  // basic validation
+  if(!payload.name || !payload.phone || !payload.email){
+    alert('Please fill in name, phone and email / 请填写姓名、电话、邮箱');
+    return;
+  }
+  const j=JSON.stringify(payload, null, 2);
+  const blob=new Blob([j],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='xanadu-lead.json'; a.click();
+  URL.revokeObjectURL(url);
+  // Also show payload for quick copy
+  document.getElementById('debug').textContent = j;
+  alert('Saved test payload as JSON. In production, post this to Google Apps Script / API.');
+}
+
+render();
+</script>
+</body>
+</html>
