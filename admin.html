@@ -48,29 +48,27 @@
 </div>
 
 <script>
-// ====== 你的 Apps Script /exec 地址 ======
+// ====== Apps Script /exec 地址（保持你的现有地址即可） ======
 const API_URL = 'https://script.google.com/macros/s/AKfycbxx1E6Ao9pBv1Ml3uyAe6RTmNfE9b-vcdia0QG6eCKIjnmcvjGAo5wmjbEHdIqLvU4I/exec';
 
+/* ---------- 小工具：安全转字符串 ---------- */
+function vstr(x){ return (x===undefined || x===null) ? '' : String(x); }
+
 /* ---------- API 封装 ---------- */
-// GET 读取列表（不加任何 headers，避免预检；带 cache-buster）
 async function apiList(){
   const url = `${API_URL}?action=list&_=${Date.now()}`;
   const res = await fetch(url, { method:'GET' });
   const text = await res.text();
-  // 非 2xx，直接返回调试信息
   if(!res.ok){
     return { ok:false, error:`HTTP ${res.status}`, raw:text };
   }
-  // 返回不是 JSON（比如权限登录页），也直接带回原文
   try{
-    const j = JSON.parse(text);
-    return j;
+    return JSON.parse(text);
   }catch(e){
     return { ok:false, error:'NOT_JSON (接口未返回 JSON，常见是未公开部署或 URL 错误)', raw:text.slice(0,800) };
   }
 }
 
-// 删除仍用 POST
 async function apiDelete(ticket){
   const res  = await fetch(API_URL, {
     method: 'POST',
@@ -104,12 +102,9 @@ async function loadList(){
     const j = await apiList();
 
     if(!j.ok){
-      // 把错误细节完全展示出来，便于判断是不是权限 /exec
       box.innerHTML = `
         <div class="card">
           <div><b>读取失败：</b>${escapeHTML(j.error||'')}</div>
-          <div class="muted" style="margin-top:6px">如果 raw 是 HTML（含 &lt;!DOCTYPE 或登录提示），
-          说明 Apps Script 未按“任何人（含匿名）”部署，或 API_URL 不是 /exec。</div>
           ${j.raw ? `<div class="err" style="margin-top:8px">${escapeHTML(j.raw)}</div>` : ''}
         </div>`;
       console.error('list error:', j);
@@ -117,43 +112,52 @@ async function loadList(){
     }
 
     const list = Array.isArray(j.data)? j.data : [];
+
+    // 疑重：同姓名 +（同微信 或 同邮箱）
     const seen = new Map();
     for(const r of list){
-      const k1 = `${(r.name||'').trim()}|${(r.wechat||'').trim()}`;
-      const k2 = `${(r.name||'').trim()}|${(r.email||'').trim()}`;
-      seen.set(k1,(seen.get(k1)||0)+1);
-      seen.set(k2,(seen.get(k2)||0)+1);
+      const k1 = `${vstr(r.name).trim()}|${vstr(r.wechat).trim()}`;
+      const k2 = `${vstr(r.name).trim()}|${vstr(r.email).trim()}`;
+      seen.set(k1, (seen.get(k1)||0)+1);
+      seen.set(k2, (seen.get(k2)||0)+1);
     }
 
+    // 按时间倒序
     const sorted = list.slice().sort((a,b)=>{
-      const ta = new Date(a.ts).getTime()||0;
-      const tb = new Date(b.ts).getTime()||0;
+      const ta = new Date(vstr(a.ts)).getTime() || 0;
+      const tb = new Date(vstr(b.ts)).getTime() || 0;
       return tb - ta;
     });
 
     const html = sorted.map(r=>{
-      const suspected = (seen.get(`${(r.name||'').trim()}|${(r.wechat||'').trim()}`)>1) ||
-                        (seen.get(`${(r.name||'').trim()}|${(r.email||'').trim()}`)>1);
-      const ticketDisp = escapeHTML(r.ticket||'');
-      const ts = r.ts ? new Date(r.ts).toLocaleString() : '';
+      const name   = vstr(r.name).trim();
+      const wechat = vstr(r.wechat).trim();
+      const email  = vstr(r.email).trim();
+      const phone  = vstr(r.phone).trim();
+      const best   = vstr(r.best);
+      const notes  = vstr(r.notes);
+      const detail = vstr(r.detail);
+      const ticket = vstr(r.ticket);
+      const suspected = (seen.get(`${name}|${wechat}`)>1) || (seen.get(`${name}|${email}`)>1);
+      const ts = r.ts ? new Date(vstr(r.ts)).toLocaleString() : '';
 
       return `
       <div class="card">
         <div class="rowhead">
           <div>
-            <b>咨询号码：</b>${ticketDisp}
+            <b>咨询号码：</b>${escapeHTML(ticket)}
             ${suspected?'<span class="badge">疑重</span>':''}
           </div>
-          <button class="btn red" onclick="confirmDelete('${ticketDisp}')">删除</button>
+          <button class="btn red" onclick="confirmDelete('${escapeHTML(ticket)}')">删除</button>
         </div>
         <table>
-          <tr><th>客户姓名</th><td>${escapeHTML(r.name||'')}</td></tr>
-          <tr><th>微信号</th><td>${escapeHTML(r.wechat==null?'':r.wechat)||'n/a'}</td></tr>
-          <tr><th>邮箱</th><td>${escapeHTML(r.email||'')}</td></tr>
-          <tr><th>电话</th><td>${escapeHTML(r.phone||'')}</td></tr>
-          <tr><th>最佳匹配推荐</th><td>${escapeHTML(r.best||'')}</td></tr>
-          <tr><th>备注</th><td>${escapeHTML(r.notes||'')}</td></tr>
-          <tr><th>报课详细选项</th><td>${escapeHTML(r.detail||'')}</td></tr>
+          <tr><th>客户姓名</th><td>${escapeHTML(name)}</td></tr>
+          <tr><th>微信号</th><td>${escapeHTML(wechat || 'n/a')}</td></tr>
+          <tr><th>邮箱</th><td>${escapeHTML(email)}</td></tr>
+          <tr><th>电话</th><td>${escapeHTML(phone)}</td></tr>
+          <tr><th>最佳匹配推荐</th><td>${escapeHTML(best)}</td></tr>
+          <tr><th>备注</th><td>${escapeHTML(notes)}</td></tr>
+          <tr><th>报课详细选项</th><td>${escapeHTML(detail)}</td></tr>
           <tr><th>时间</th><td class="muted">${escapeHTML(ts)}</td></tr>
         </table>
       </div>`;
