@@ -51,15 +51,17 @@
 
 <script>
 /* ========= 后端 API（把 URL 换成你的 /exec） ========= */
-const API_URL = 'https://script.google.com/macros/s/AKfycbw4fkM2ybBtJ53KrJ0hnrc7qm0-l4Curpe1F7pEIFBtdRzraYJN4s8AhypuC3oP9PEI/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwJv1CgsK6iP5LyQtm0w0Z4e-KonBqn_nzemPKg0gMHbWCjMAHo9WTHuBxNrw-82oEr/exec';
 async function apiCreate(record){
   const res = await fetch(API_URL, {
     method: 'POST',
-    headers: { 'Content-Type':'application/json' },
-    body: JSON.stringify({ action:'create', data: record })
+    // 关键：用 text/plain 避免 CORS 预检（Apps Script 不需要自定义响应头）
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'create', data: record })
   });
   return res.json();
 }
+
 
 /* ========= 文案 ========= */
 const STR={
