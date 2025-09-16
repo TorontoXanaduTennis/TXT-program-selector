@@ -52,13 +52,15 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbxx1E6Ao9pBv1Ml3uyAe6RT
 
 // 使用 text/plain 避免 CORS 预检
 async function apiList(){
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action: 'list' })
-  });
+  const url = API_URL + '?action=list&_=' + Date.now(); // cache-buster
+  const res = await fetch(url, { method: 'GET' });      // 不要加 headers
   const text = await res.text();
-  try{ return JSON.parse(text); }catch{ return { ok:false, error:'NOT_JSON', raw:text }; }
+  try { 
+    return JSON.parse(text);
+  } catch (e) {
+    console.error('LIST not JSON:', text);
+    return { ok:false, error:'NOT_JSON', raw:text };
+  }
 }
 
 async function apiDelete(ticket){
