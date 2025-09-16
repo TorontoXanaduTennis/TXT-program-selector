@@ -65,7 +65,7 @@ function login(){
 function load(){
   const list=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
 
-  // 疑重判断：同名+（同微信 或 同邮箱）
+  // 疑重判断：同名 +（同微信 或 同邮箱）
   const seen=new Map();
   list.forEach(r=>{
     const k1=`${r.name}|${r.wechat||''}`;
@@ -83,8 +83,8 @@ function load(){
     return `
     <div class="card">
       <div class="rowhead">
-        <div><b>咨询号码：</b>${ticketDisp}</div>
-        <button class="btn red" onclick="confirmDelete('${r.ticket}')">删除</button>
+        <div><b>咨询号码：</b>${escapeHTML(ticketDisp)}</div>
+        <button class="btn red" onclick="confirmDelete('${escapeAttr(r.ticket)}')">删除</button>
       </div>
       <table>
         <tr><th>客户姓名</th><td>${escapeHTML(r.name||'')}</td></tr>
@@ -93,7 +93,7 @@ function load(){
         <tr><th>最佳匹配推荐</th><td>${escapeHTML(r.best||'')}</td></tr>
         <tr><th>备注</th><td>${escapeHTML(r.notes||'')}</td></tr>
         <tr><th>报课详细选项</th><td>${escapeHTML(r.detail||'')}</td></tr>
-        <tr><th>时间</th><td class="muted">${ts}</td></tr>
+        <tr><th>时间</th><td class="muted">${escapeHTML(ts)}</td></tr>
       </table>
     </div>`;
   }).join('');
@@ -116,13 +116,17 @@ function confirmDelete(ticket){
 function deleteByTicket(ticket){
   const list=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
   const next=list.filter(r=>r.ticket!==ticket);
-  localStorage.setItem(STORAGE_KEY', JSON.stringify(next));
+  // 这里修复了引号错误
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   load();
 }
 
-// 简单转义，避免表格里出现特殊字符影响渲染
+// 转义工具
 function escapeHTML(s){
   return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+function escapeAttr(s){
+  return String(s).replace(/['"\\]/g, c=>({'"':'&quot;',"'":'&#39;','\\':'\\\\'}[c]));
 }
 </script>
 </body>
