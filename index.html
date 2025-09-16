@@ -50,6 +50,20 @@
   </div>
 
 <script>
+
+// ===== 后端 API（把 URL 换成你的 /exec）
+const API_URL = 'https://script.google.com/macros/s/AKfycbw4fkM2ybBtJ53KrJ0hnrc7qm0-l4Curpe1F7pEIFBtdRzraYJN4s8AhypuC3oP9PEI/exec';
+
+async function apiCreate(record){
+  // POST { action:'create', data:{...} } -> { ok:true, ticket:'XT00001' }
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify({ action:'create', data: record })
+  });
+  return res.json();
+}
+
 // 文案
 const STR={
   zh:{title:'智能课程推荐',lang:'请选择语言',zh:'中文',en:'English',audience:'请选择报名对象',adult:'成人 (14+)',child:'儿童 U14',a_level:'请选择成人当前水平',zero:'零基础',basic:'有一定基础',inter:'能对打/发球',adv:'能比赛',k_mode:'请选择儿童课程模式',flex:'短期 Flex',longterm:'长期 固定周课',group:'更偏好的上课人数？',g1:'1v1',g2:'1v2',g3:'1v3',g4:'1v4',g46:'1v4–6',join:'是否可自带队友或接受拼班？',j_bring:'我能带1–3位朋友',j_join:'愿意拼班（由我们匹配）',j_none:'都不方便',coach:'您偏好男教练还是女教练？',cm:'男教练',cf:'女教练',ca:'都可以',sched:'时间偏好',wd:'工作日白天',we:'工作日晚间',wk:'周末',flex2:'都可以',freq:'每周计划上课频次',f1:'1×/周',f2:'2×/周',f3:'3×+/周',term:'请选择课程周期',term25:'半年(25周)',term50:'一年(50周)',rec:'为您生成的推荐',main:'最匹配',alt:'其他可选',price_all:'完整价目表',adult_zero:'成人 · 零基础（红球场）',adult_basic:'成人 · 进阶专项（半场）',adult_full:'成人 · 定制训练（全场）',kid_flex:'U14 · 短期 Flex',kid_lt:'U14 · 长期固定（半年/一年）',contact:'请留下联系方式，我们将在 24 小时内联系您完成报课',name:'姓名',phone:'手机号',email:'邮箱',wechat:'微信号(必填)',notes:'备注(可填年龄/可用时间)',submit:'提交',submitted:'提交成功！已生成咨询号码：',restart:'重新开始'},
@@ -199,15 +213,15 @@ async function submitLead(){
     alert('请填写微信号'); return;
   }
 
-  // 计算最佳匹配（沿用你原来的逻辑）
+  // 计算最佳匹配（沿用你已有逻辑）
   const rec=(S.audience==='adult')?buildAdult():buildKids();
   const main=localizeRows([rec.main])[0];
   const best=`${rec.title} · ${main[0]} · ${main[1]}${main[2]?(' · '+main[2]):''}`;
 
-  // 选项摘要（沿用你原有 chosenSummary）
+  // 选项摘要（沿用你已有 chosenSummary）
   const detail = chosenSummary();
 
-  // 组装提交数据（ticket 让后端统一生成，更稳）
+  // 发送到后端（ticket 由后端生成）
   const payload = {
     name,
     wechat:(S.lang==='zh'?(we?we.value.trim():''):'n/a'),
@@ -216,7 +230,6 @@ async function submitLead(){
     notes:(document.getElementById('c_notes').value||'').trim(),
     detail,
     ts:new Date().toISOString(),
-    // 也可带上 phone，Sheet 里要就加一列；若不要可删
     phone
   };
 
@@ -226,7 +239,7 @@ async function submitLead(){
       alert(S.lang==='zh'?'提交失败，请稍后再试':'Submit failed, please try again.');
       return;
     }
-    S.lastTicket = j.ticket;   // 用后端生成的咨询号
+    S.lastTicket = j.ticket;   // 后端生成的咨询号
     S.submitted = true;
     render();
   }catch(err){
@@ -234,6 +247,7 @@ async function submitLead(){
     alert(S.lang==='zh'?'网络异常，请稍后再试':'Network error, please try again later.');
   }
 }
+
 
 // 选项按钮
 function opt(label,call){
