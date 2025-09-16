@@ -46,6 +46,23 @@
 </div>
 
 <script>
+const API_URL = 'https://script.google.com/macros/s/https://script.google.com/macros/s/AKfycbyjdf7q5rN9YfqL8LNURZg3Ep-17aPUoPlYQAFLngvWrH35JI2ETBJLBc3B1klxgGlb/exec';
+
+async function apiList(){
+  // 期望 Apps Script GET 返回：{ok:true, list:[{ticket,name,wechat,email,best,notes,detail,ts}]}
+  const res = await fetch(API_URL);
+  return res.json();
+}
+async function apiDelete(ticket){
+  // 期望 Apps Script 接口：POST {action:'delete', ticket:'XT00001'} -> {ok:true}
+  const res = await fetch(API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action:'delete', ticket })
+  });
+  return res.json();
+}
+
 const STORAGE_KEY='xanadu_submissions';
 
 // 登录
@@ -62,17 +79,51 @@ function login(){
 }
 
 // 载入并渲染
-function load(){
-  const list=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+async function load(){
+  try{
+    const j = await apiList();
+    if(!j.ok){ document.getElementById('list').innerHTML='<div class="card">读取失败</div>'; return; }
+    const list = j.list || [];
 
-  // 疑重判断：同名 +（同微信 或 同邮箱）
-  const seen=new Map();
-  list.forEach(r=>{
-    const k1=`${r.name}|${r.wechat||''}`;
-    const k2=`${r.name}|${r.email||''}`;
-    seen.set(k1,(seen.get(k1)||0)+1);
-    seen.set(k2,(seen.get(k2)||0)+1);
-  });
+    // 疑重判断（同名 +（同微信 或 同邮箱））
+    const seen=new Map();
+    list.forEach(r=>{
+      const k1=`${r.name}|${r.wechat||''}`;
+      const k2=`${r.name}|${r.email||''}`;
+      seen.set(k1,(seen.get(k1)||0)+1);
+      seen.set(k2,(seen.get(k2)||0)+1);
+    });
+
+    const rows=list.slice().reverse().map(r=>{
+      const suspected = (seen.get(`${r.name}|${r.wechat||''}`)>1) || (seen.get(`${r.name}|${r.email||''}`)>1);
+      const ticketDisp = r.ticket + (suspected ? '（疑重）' : '');
+      const ts = new Date(r.ts).toLocaleString();
+
+      return `
+      <div class="card">
+        <div class="rowhead">
+          <div><b>咨询号码：</b>${escapeHTML(ticketDisp)}</div>
+          <button class="btn red" onclick="confirmDelete('${escapeAttr(r.ticket)}')">删除</button>
+        </div>
+        <table>
+          <tr><th>客户姓名</th><td>${escapeHTML(r.name||'')}</td></tr>
+          <tr><th>微信号</th><td>${escapeHTML(r.wechat||'n/a')}</td></tr>
+          <tr><th>邮箱</th><td>${escapeHTML(r.email||'')}</td></tr>
+          <tr><th>最佳匹配推荐</th><td>${escapeHTML(r.best||'')}</td></tr>
+          <tr><th>备注</th><td>${escapeHTML(r.notes||'')}</td></tr>
+          <tr><th>报课详细选项</th><td>${escapeHTML(r.detail||'')}</td></tr>
+          <tr><th>时间</th><td class="muted">${escapeHTML(ts)}</td></tr>
+        </table>
+      </div>`;
+    }).join('');
+
+    document.getElementById('list').innerHTML = rows || '<div class="card">暂无记录</div>';
+  }catch(err){
+    console.error(err);
+    document.getElementById('list').innerHTML='<div class="card">读取失败（网络或权限问题）</div>';
+  }
+}
+
 
   // 最新在前
   const rows=list.slice().reverse().map(r=>{
