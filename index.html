@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Toronto Xanadu Tennis • Recommender (v4 Full)</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Toronto Xanadu Tennis • Recommender</title>
 <style>
-  body{margin:0;background:#ffffff;color:#1f2937;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  body{margin:0;background:#fff;color:#1f2937;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
   .topbar{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;padding:12px 16px}
-  .topbar .brand{font-weight:700}
+  .brand{font-weight:700}
   .wrap{min-height:100vh;display:flex;justify-content:center}
   .stage{width:100%;max-width:980px;margin:calc(62vh - 360px) auto 32px;padding:0 16px}
   .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px;box-shadow:0 6px 20px #0000000d}
@@ -30,7 +30,6 @@
   textarea{min-height:88px}
   label{font-size:14px;color:#6b7280}
   .muted{color:#6b7280}
-  /* 最终推荐色块 */
   .mainrec{background:#d1fae5!important}
   .altrec{background:#e0f2fe!important}
 </style>
@@ -51,269 +50,298 @@
   </div>
 
 <script>
-// ===== 文案
-var STR={
+// 文案
+const STR={
   zh:{title:'智能课程推荐',lang:'请选择语言',zh:'中文',en:'English',audience:'请选择报名对象',adult:'成人 (14+)',child:'儿童 U14',a_level:'请选择成人当前水平',zero:'零基础',basic:'有一定基础',inter:'能对打/发球',adv:'能比赛',k_mode:'请选择儿童课程模式',flex:'短期 Flex',longterm:'长期 固定周课',group:'更偏好的上课人数？',g1:'1v1',g2:'1v2',g3:'1v3',g4:'1v4',g46:'1v4–6',join:'是否可自带队友或接受拼班？',j_bring:'我能带1–3位朋友',j_join:'愿意拼班（由我们匹配）',j_none:'都不方便',coach:'您偏好男教练还是女教练？',cm:'男教练',cf:'女教练',ca:'都可以',sched:'时间偏好',wd:'工作日白天',we:'工作日晚间',wk:'周末',flex2:'都可以',freq:'每周计划上课频次',f1:'1×/周',f2:'2×/周',f3:'3×+/周',term:'请选择课程周期',term25:'半年(25周)',term50:'一年(50周)',rec:'为您生成的推荐',main:'最匹配',alt:'其他可选',price_all:'完整价目表',adult_zero:'成人 · 零基础（红球场）',adult_basic:'成人 · 进阶专项（半场）',adult_full:'成人 · 定制训练（全场）',kid_flex:'U14 · 短期 Flex',kid_lt:'U14 · 长期固定（半年/一年）',contact:'请留下联系方式，我们将在 24 小时内联系您完成报课',name:'姓名',phone:'手机号',email:'邮箱',wechat:'微信号(必填)',notes:'备注(可填年龄/可用时间)',submit:'提交',submitted:'提交成功！已生成咨询号码：',restart:'重新开始'},
   en:{title:'Smart Course Recommender',lang:'Choose your language',zh:'中文',en:'English',audience:'Who is this for?',adult:'Adult (14+)',child:'Child (U14)',a_level:'Select your current level',zero:'True beginner',basic:'Some basics',inter:'Can rally/serve',adv:'Match-ready',k_mode:'Select course mode',flex:'Short-term Flex',longterm:'Long-term weekly',group:'Preferred class size?',g1:'1v1',g2:'1v2',g3:'1v3',g4:'1v4',g46:'1v4–6',join:'Can you bring friends or join matching?',j_bring:'I can bring 1–3 friends',j_join:'Happy to be matched',j_none:'Prefer not',coach:'Coach gender preference?',cm:'Male',cf:'Female',ca:'No preference',sched:'Schedule preference',wd:'Weekday daytime',we:'Weekday evening',wk:'Weekend',flex2:'Flexible',freq:'Sessions per week',f1:'1×/week',f2:'2×/week',f3:'3×+/week',term:'Select course term',term25:'Half-year (25 weeks)',term50:'Full-year (50 weeks)',rec:'Your recommendations',main:'Best match',alt:'Other options',price_all:'Full Price List',adult_zero:'Adults · True Beginner (Red court)',adult_basic:'Adults · Skill Focus (Half court)',adult_full:'Adults · Custom (Full court)',kid_flex:'U14 · Short-term Flex',kid_lt:'U14 · Long-term (Half/Full year)',contact:'Leave your contact. We will reach out within 24 hours to complete your registration.',name:'Full Name',phone:'Phone',email:'Email',wechat:'WeChat (required)',notes:'Notes (availability, age, etc.)',submit:'Submit',submitted:'Success! Your Ticket No: ',restart:'Restart'}
 };
-function t(k){return STR[S.lang||'zh'][k];}
+const t=k=>STR[S.lang||'zh'][k];
 
-// ===== 价目（含修改）
-var PRICE={
+// 价目（成人删95折；儿童长期补3pw）
+const PRICE={
   adult_zero:[["1v1 10hr","$800/人","试课$100"],["1v1 20hr","$1550/人",""],["1v2 10hr","$1000/共","试课$140"],["1v2 20hr","$1900/共",""],["1v3 15hr","$1500/共","试课$240"],["1v4 15hr","$1800/共","试课$280"]],
   adult_basic:[["1v1 10hr","$900/人","试课$110"],["1v1 20hr","$1710/人",""],["1v2 10hr","$1250/共","试课$150"],["1v2 20hr","$2375/共",""],["1v3 15hr","$1500/共","试课$240"],["1v4 15hr","$1800/共","试课$280"]],
   adult_full:[["1v1 10hr","$1300/人","试课$140"],["1v1 20hr","$2470/人",""],["1v2 10hr","$1500/共","试课$160"],["1v2 20hr","$2850/共",""],["1v3 15hr","$2400/共","试课$270"],["1v4 15hr","$2800/共","试课$320"]],
   kid_flex:[["1v1 10hr","$900/人","试课$100"],["1v2 10hr","$1250/共","试课$140"],["1v3 15hr","$500/人","试课$240"],["1v4 15hr","$450/人","试课$280"]]
 };
-var K_LT={
+const K_LT={
   '1v1':{'1pw':{'25':['$1875','(75/hr)'],'50':['$3600','(72/hr)']},'2pw':{'25':['$3550','(71/hr)'],'50':['$6700','(67/hr)']},'3pw':{'25':['$4875','(65/hr)'],'50':['$9300','(62/hr)']}},
   '1v2':{'1pw':{'25':['$2375','(95/hr)'],'50':['$4600','(92/hr)']},'2pw':{'25':['$4550','(91/hr)'],'50':['$8700','(87/hr)']},'3pw':{'25':['$6375','(85/hr)'],'50':['$12100','(80.67/hr)']}},
   '1v3':{'1pw':{'25':['$3000','(120/hr)'],'50':['$5850','(117/hr)']},'2pw':{'25':['$5750','(115/hr)'],'50':['$11000','(110/hr)']},'3pw':{'25':['$7875','(105/hr)'],'50':['$15000','(100/hr)']}},
   '1v4-6':{'1pw':{'25':['$3650','(146/hr)'],'50':['$7150','(143/hr)']},'2pw':{'25':['$7050','(141/hr)'],'50':['$13650','(136.5/hr)']},'3pw':{'25':['$9750','(130/hr)'],'50':['$18750','(125/hr)']}}
 };
 
-// ===== 状态 & 导航
-var S={lang:null,history:[],audience:null,a_level:null,group:null,join:null,coach:null,sched:null,freq:null,k_mode:null,k_group:null,k_join:null,k_coach:null,k_sched:null,k_freq:null,k_term:null,submitted:false,lastTicket:null};
-var app=document.getElementById('app');
-function pushStep(){S.history.push(JSON.stringify(S));}
-function goBack(){if(S.history.length>0){var prev=S.history.pop();var restored=JSON.parse(prev);var keep=S.history.slice();S=restored;S.history=keep;render();}}
-function restartAll(){S={lang:null,history:[],audience:null,a_level:null,group:null,join:null,coach:null,sched:null,freq:null,k_mode:null,k_group:null,k_join:null,k_coach:null,k_sched:null,k_freq:null,k_term:null,submitted:false,lastTicket:null};render();}
+// 状态
+let S={lang:null,history:[],audience:null,a_level:null,group:null,join:null,coach:null,sched:null,freq:null,k_mode:null,k_group:null,k_join:null,k_coach:null,k_sched:null,k_freq:null,k_term:null,submitted:false,lastTicket:null};
+const app=document.getElementById('app');
+const pushStep=()=>S.history.push(JSON.stringify(S));
+function goBack(){ if(!S.history.length) return; const prev=S.history.pop(); const keep=S.history.slice(); S=JSON.parse(prev); S.history=keep; render(); }
+function restartAll(){ S={lang:null,history:[],audience:null,a_level:null,group:null,join:null,coach:null,sched:null,freq:null,k_mode:null,k_group:null,k_join:null,k_coach:null,k_sched:null,k_freq:null,k_term:null,submitted:false,lastTicket:null}; render(); }
 
-// ===== 工具
-function zh2enCell(x){return x.replace('/人',' per person').replace('/共',' per group').replace('试课','$ Trial ').replace('小时',' hours');}
-function localizeRows(rows){if((S.lang||'zh')==='zh') return rows;var out=[];for(var i=0;i<rows.length;i++){out.push([zh2enCell(rows[i][0]),zh2enCell(rows[i][1]),zh2enCell(rows[i][2]||'')]);}return out;}
-function table(rows){var R=localizeRows(rows);var th1=(S.lang==='en')?'Package':'套餐',th2=(S.lang==='en')?'Price':'价格',th3=(S.lang==='en')?'Note':'备注';var h='<table><thead><tr><th>'+th1+'</th><th>'+th2+'</th><th>'+th3+'</th></tr></thead><tbody>';for(var i=0;i<R.length;i++){h+='<tr><td>'+R[i][0]+'</td><td>'+R[i][1]+'</td><td>'+(R[i][2]||'')+'</td></tr>';}return h+'</tbody></table>';}
-function tableKLT(){var groups=['1v1','1v2','1v3','1v4-6'],freqs=['1pw','2pw','3pw'];var thF=(S.lang==='en')?'Freq':'频次',th25=(S.lang==='en')?'25 weeks':'25周',th50=(S.lang==='en')?'50 weeks':'50周';var html='';for(var i=0;i<groups.length;i++){html+='<div class="card"><div class="q">'+groups[i]+'</div><table><thead><tr><th>'+thF+'</th><th>'+th25+'</th><th>'+th50+'</th></tr></thead><tbody>';for(var j=0;j<freqs.length;j++){if(K_LT[groups[i]][freqs[j]]){var c25=K_LT[groups[i]][freqs[j]]['25'].join(' '),c50=K_LT[groups[i]][freqs[j]]['50'].join(' ');html+='<tr><td>'+freqs[j]+'</td><td>'+c25+'</td><td>'+c50+'</td></tr>';}}html+='</tbody></table></div>';}return html;}
-function findRow(rows,group,hours){var key=group+' '+hours+'hr';for(var i=0;i<rows.length;i++){if(rows[i][0].indexOf(key)===0) return rows[i];}return null;}
-function chooseHours(group){return (group==='1v1'||group==='1v2')?((S.freq==='f2'||S.freq==='f3')?20:10):15;}
+// 工具
+const zh2enCell=x=>x.replace('/人',' per person').replace('/共',' per group').replace('试课','$ Trial ').replace('小时',' hours');
+function localizeRows(rows){ if((S.lang||'zh')==='zh') return rows; return rows.map(r=>[zh2enCell(r[0]),zh2enCell(r[1]),zh2enCell(r[2]||'')]); }
+function table(rows){
+  const R=localizeRows(rows);
+  const th1=(S.lang==='en')?'Package':'套餐', th2=(S.lang==='en')?'Price':'价格', th3=(S.lang==='en')?'Note':'备注';
+  return `<table><thead><tr><th>${th1}</th><th>${th2}</th><th>${th3}</th></tr></thead><tbody>${
+    R.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]||''}</td></tr>`).join('')
+  }</tbody></table>`;
+}
+function tableKLT(){
+  const groups=['1v1','1v2','1v3','1v4-6'], freqs=['1pw','2pw','3pw'];
+  const thF=(S.lang==='en')?'Freq':'频次', th25=(S.lang==='en')?'25 weeks':'25周', th50=(S.lang==='en')?'50 weeks':'50周';
+  return groups.map(g=>{
+    const rows=freqs.filter(f=>K_LT[g][f]).map(f=>{
+      const c25=K_LT[g][f]['25'].join(' '), c50=K_LT[g][f]['50'].join(' ');
+      return `<tr><td>${f}</td><td>${c25}</td><td>${c50}</td></tr>`;
+    }).join('');
+    return `<div class="card"><div class="q">${g}</div><table><thead><tr><th>${thF}</th><th>${th25}</th><th>${th50}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }).join('');
+}
+function findRow(rows,group,hours){ return rows.find(r=>r[0].startsWith(`${group} ${hours}hr`))||null; }
+function chooseHours(group){ return (group==='1v1'||group==='1v2')?((S.freq==='f2'||S.freq==='f3')?20:10):15; }
 
-// ===== 推荐
-function tierFromAdultLevel(){if(S.a_level==='zero') return 'zero';if(S.a_level==='basic') return 'basic';return 'full';}
-function priceTableByTier(t){return t==='zero'?PRICE.adult_zero:(t==='basic'?PRICE.adult_basic:PRICE.adult_full);} 
-function buildAdult(){var tier=tierFromAdultLevel();var table=priceTableByTier(tier);var g=S.group||'1v2';var h=chooseHours(g);var main=findRow(table,g,h)||table[0];var other=[];var order=['1v1','1v2','1v3','1v4'];for(var i=0;i<order.length;i++){if(order[i]!==g){var r=findRow(table,order[i],chooseHours(order[i]));if(r) other.push(r);}}var title=(tier==='zero')?t('adult_zero'):(tier==='basic'?t('adult_basic'):t('adult_full'));return {title:title,main:main,other:other};}
-function buildKids(){if(S.k_mode==='flex'){var g=S.k_group||'1v2';var h=(g==='1v1'||g==='1v2')?10:15;var table=PRICE.kid_flex;var main=findRow(table,g,h)||table[0];var other=[];var order=['1v1','1v2','1v3','1v4'];for(var i=0;i<order.length;i++){if(order[i]!==g){var r=findRow(table,order[i],(order[i]==='1v1'||order[i]==='1v2')?10:15);if(r) other.push(r);}}return {title:t('kid_flex'),main:main,other:other};}else{var freqMap={f1:'1pw',f2:'2pw',f3:'3pw'};var g2=S.k_group||'1v2',term=S.k_term||'25',f=freqMap[S.k_freq||'f1'];function toRow(gg){if(!K_LT[gg]||!K_LT[gg][f]||!K_LT[gg][f][term]) return null;var tup=K_LT[gg][f][term];return [gg+' '+f,tup[0],tup[1]];}var main2=toRow(g2);if(!main2){var fallback=['1v1','1v2','1v3','1v4-6'];for(var ii=0;ii<fallback.length;ii++){main2=toRow(fallback[ii]);if(main2) break;}}var other2=[],order2=['1v1','1v2','1v3','1v4-6'];var mainKey=main2?main2[0].split(' ')[0]:null;for(var j=0;j<order2.length;j++){var row=toRow(order2[j]);if(row&&(!mainKey||row[0].indexOf(mainKey)!==0)) other2.push(row);}if(!main2){main2=['—','—',''];}return {title:t('kid_lt'),main:main2,other:other2};}}
+// 推荐
+function tierFromAdultLevel(){ if(S.a_level==='zero') return 'zero'; if(S.a_level==='basic') return 'basic'; return 'full'; }
+const priceTableByTier=tier=>tier==='zero'?PRICE.adult_zero:(tier==='basic'?PRICE.adult_basic:PRICE.adult_full);
+function buildAdult(){
+  const tier=tierFromAdultLevel(), table=priceTableByTier(tier), g=S.group||'1v2', h=chooseHours(g);
+  const main=findRow(table,g,h)||table[0];
+  const other=['1v1','1v2','1v3','1v4'].filter(x=>x!==g).map(x=>findRow(table,x,chooseHours(x))).filter(Boolean);
+  const title=(tier==='zero')?t('adult_zero'):(tier==='basic'?t('adult_basic'):t('adult_full'));
+  return {title,main,other};
+}
+function buildKids(){
+  if(S.k_mode==='flex'){
+    const g=S.k_group||'1v2', h=(g==='1v1'||g==='1v2')?10:15, table=PRICE.kid_flex;
+    const main=findRow(table,g,h)||table[0];
+    const other=['1v1','1v2','1v3','1v4'].filter(x=>x!==g).map(x=>findRow(table,x,(x==='1v1'||x==='1v2')?10:15)).filter(Boolean);
+    return {title:t('kid_flex'),main,other};
+  }else{
+    const freqMap={f1:'1pw',f2:'2pw',f3:'3pw'};
+    const g2=S.k_group||'1v2', term=S.k_term||'25', f=freqMap[S.k_freq||'f1'];
+    const toRow=gg=>K_LT[gg]&&K_LT[gg][f]&&K_LT[gg][f][term]?[`${gg} ${f}`,...K_LT[gg][f][term]]:null;
+    let main2=toRow(g2);
+    if(!main2){ for(const gg of ['1v1','1v2','1v3','1v4-6']){ main2=toRow(gg); if(main2) break; } }
+    const mainKey=main2?main2[0].split(' ')[0]:null;
+    const other2=['1v1','1v2','1v3','1v4-6'].map(toRow).filter(r=>r && (!mainKey || !r[0].startsWith(mainKey)));
+    return {title:t('kid_lt'),main:main2||['—','—',''],other:other2};
+  }
+}
 
-// ===== 存储（给 admin.html 用）
+// 本地“后端”
 const STORAGE_KEY='xanadu_submissions';
 const COUNTER_KEY='xanadu_counter';
-function nextTicket(){var n=parseInt(localStorage.getItem(COUNTER_KEY)||'0',10)+1;localStorage.setItem(COUNTER_KEY,String(n));return 'XT'+String(n).padStart(5,'0');}
-function saveRecord(rec){var list=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');list.push(rec);localStorage.setItem(STORAGE_KEY,JSON.stringify(list));}
+function nextTicket(){ const n=Number(localStorage.getItem(COUNTER_KEY)||0)+1; localStorage.setItem(COUNTER_KEY,String(n)); return 'XT'+String(n).padStart(5,'0'); }
+function saveRecord(rec){ const list=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); list.push(rec); localStorage.setItem(STORAGE_KEY,JSON.stringify(list)); }
 
-// ===== 生成“已选选项”摘要（只列选项本身）
+// 选项摘要（只列选项）
 function chosenSummary(){
-  var arr=[]; 
-  if(S.lang==='zh'){arr.push('中文');} else {arr.push('English');}
+  const a=[];
+  a.push(S.lang==='zh'?'中文':'English');
   if(S.audience==='adult'){
-    arr.push('成人');
-    if(S.a_level) arr.push(t(S.a_level));
-    if(S.group) arr.push(S.group);
-    if(S.group!=='1v1' && S.join) arr.push(t(S.join));
-    if(S.coach) arr.push(t('c'+S.coach));
-    if(S.sched) arr.push(t(S.sched));
-    if(S.freq) arr.push(t(S.freq));
-  }else if(S.audience==='child'){
-    arr.push('儿童');
-    if(S.k_mode) arr.push(t(S.k_mode));
-    if(S.k_group) arr.push(S.k_group);
-    if(S.k_group!=='1v1' && S.k_join) arr.push(t(S.k_join));
-    if(S.k_coach) arr.push(t('c'+S.k_coach));
-    if(S.k_sched) arr.push(t(S.k_sched));
-    if(S.k_freq) arr.push(t(S.k_freq));
-    if(S.k_mode==='longterm' && S.k_term) arr.push(S.k_term==='25'?t('term25'):t('term50'));
+    a.push('成人');
+    if(S.a_level) a.push(t(S.a_level));
+    if(S.group) a.push(S.group);
+    if(S.group!=='1v1' && S.join) a.push(t(S.join));
+    if(S.coach) a.push(t('c'+S.coach));
+    if(S.sched) a.push(t(S.sched));
+    if(S.freq) a.push(t(S.freq));
+  }else{
+    a.push('儿童');
+    if(S.k_mode) a.push(t(S.k_mode));
+    if(S.k_group) a.push(S.k_group);
+    if(S.k_group!=='1v1' && S.k_join) a.push(t(S.k_join));
+    if(S.k_coach) a.push(t('c'+S.k_coach));
+    if(S.k_sched) a.push(t(S.k_sched));
+    if(S.k_freq) a.push(t(S.k_freq));
+    if(S.k_mode==='longterm' && S.k_term) a.push(S.k_term==='25'?t('term25'):t('term50'));
   }
-  return arr.filter(Boolean).join(', ');
+  return a.join(', ');
 }
 
-// ===== 联系/提交
-function contactBlock(){ 
-  var zh=(S.lang==='zh'); 
-  var html=''; 
-  html+='<div class="hr"></div><div class="q">'+t('contact')+'</div>'; 
-  html+='<div class="grid">'; 
-  html+='<div class="card"><label>'+t('name')+'<br><input id="c_name" type="text"></label></div>'; 
-  html+='<div class="card"><label>'+t('phone')+'<br><input id="c_phone" type="tel"></label></div>'; 
-  html+='<div class="card"><label>'+t('email')+'<br><input id="c_email" type="email"></label></div>'; 
-  html+=(zh?'<div class="card"><label>'+t('wechat')+'<br><input id="c_wechat" type="text"></label></div>':''); 
-  html+='</div>'; 
-  html+='<div class="card" style="margin-top:8px"><label>'+t('notes')+'<br><textarea id="c_notes"></textarea></label></div>'; 
-  html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back': '返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button><button class="btn alt" onclick="submitLead()">'+t('submit')+'</button></div>'; 
-  return html; 
+// 联系/提交
+function contactBlock(){
+  const zh=(S.lang==='zh');
+  return `
+    <div class="hr"></div><div class="q">${t('contact')}</div>
+    <div class="grid">
+      <div class="card"><label>${t('name')}<br><input id="c_name" type="text"></label></div>
+      <div class="card"><label>${t('phone')}<br><input id="c_phone" type="tel"></label></div>
+      <div class="card"><label>${t('email')}<br><input id="c_email" type="email"></label></div>
+      ${zh?`<div class="card"><label>${t('wechat')}<br><input id="c_wechat" type="text"></label></div>`:''}
+    </div>
+    <div class="card" style="margin-top:8px"><label>${t('notes')}<br><textarea id="c_notes"></textarea></label></div>
+    <div class="footer">
+      <button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en')?'Back':'返回'}</button>
+      <button class="btn ghost" onclick="restartAll()">${t('restart')}</button>
+      <button class="btn alt" onclick="submitLead()">${t('submit')}</button>
+    </div>`;
 }
-function submitLead(){ 
-  var name=document.getElementById('c_name').value.trim(); 
-  var phone=document.getElementById('c_phone').value.trim(); 
-  var email=document.getElementById('c_email').value.trim(); 
-  var we=document.getElementById('c_wechat'); 
-  if(!name||!phone||!email){ alert((S.lang==='zh')?'请填写姓名/电话/邮箱':'Please fill name/phone/email'); return; } 
-  if(S.lang==='zh' && we && !we.value.trim()){ alert('请填写微信号'); return; } 
+function submitLead(){
+  const name=document.getElementById('c_name').value.trim();
+  const phone=document.getElementById('c_phone').value.trim();
+  const email=document.getElementById('c_email').value.trim();
+  const we=document.getElementById('c_wechat');
+  if(!name||!phone||!email){ alert(S.lang==='zh'?'请填写姓名/电话/邮箱':'Please fill name/phone/email'); return; }
+  if(S.lang==='zh' && we && !we.value.trim()){ alert('请填写微信号'); return; }
 
-  var rec=(S.audience==='adult')?buildAdult():buildKids(); 
-  var main=localizeRows([rec.main])[0]; 
-  var best=rec.title+' · '+main[0]+' · '+main[1]+(main[2]?' · '+main[2]:'');
+  const rec=(S.audience==='adult')?buildAdult():buildKids();
+  const main=localizeRows([rec.main])[0];
+  const best=`${rec.title} · ${main[0]} · ${main[1]}${main[2]?(' · '+main[2]):''}`;
 
-  var ticket=nextTicket(); 
-  var record={
-    ticket:ticket,
-    name:name,
+  const ticket=nextTicket();
+  saveRecord({
+    ticket, name,
     wechat:(S.lang==='zh'?(we?we.value.trim():''):'n/a'),
-    email:email,
-    best:best,
+    email, best,
     notes:(document.getElementById('c_notes').value||'').trim(),
-    detail:chosenSummary(),
-    ts:new Date().toISOString()
-  };
-  saveRecord(record);
-
-  S.lastTicket=ticket; 
-  S.submitted=true; 
-  render(); 
+    detail:chosenSummary(), ts:new Date().toISOString()
+  });
+  S.lastTicket=ticket; S.submitted=true; render();
 }
 
-// ===== 选项按钮
-function opt(label, call){ return '<div class="opt" onclick="'+call+'; this.classList.add(\\'selected\\')">'+label+'</div>'; }
+// 选项按钮
+function opt(label,call){
+  return `<div class="opt" onclick="${call}; this.classList.add('selected')">${label}</div>`;
+}
 
-// ===== 渲染
-function render(){ 
-  var html='';
+// 渲染
+function render(){
+  let html='';
 
-  // 提交成功页
-  if(S.submitted){ 
-    html+='<h1>'+t('title')+'</h1>';
-    html+='<div class="card" style="text-align:center">';
-    html+='<div style="font-size:18px;margin:8px 0">'+t('submitted')+'<b>'+S.lastTicket+'</b></div>';
-    html+='<div class="muted">'+((S.lang==='zh')?'请截图保存咨询号码，便于后续报名与查询。':'Please take a screenshot of your Ticket No for follow-up.')+'</div>';
-    html+='<div class="footer" style="justify-content:center"><button class="btn" onclick="restartAll()">'+t('restart')+'</button></div>';
-    html+='</div>';
-    app.innerHTML=html; 
-    return; 
+  if(S.submitted){
+    html+=`<h1>${t('title')}</h1>
+      <div class="card" style="text-align:center">
+        <div style="font-size:18px;margin:8px 0">${t('submitted')}<b>${S.lastTicket}</b></div>
+        <div class="muted">${S.lang==='zh'?'请截图保存咨询号码，便于后续报名与查询。':'Please screenshot your ticket for follow-up.'}</div>
+        <div class="footer" style="justify-content:center"><button class="btn" onclick="restartAll()">${t('restart')}</button></div>
+      </div>`;
+    app.innerHTML=html; return;
   }
 
-  // 语言
-  if(!S.lang){ 
-    html+='<h1>'+STR.en.title+' / '+STR.zh.title+'</h1>';
-    html+='<div class="q">'+STR.en.lang+'</div>';
-    html+='<div class="choices">'+opt(STR.zh.zh,"pushStep(); S.lang='zh'; render();")+opt(STR.en.en,"pushStep(); S.lang='en'; render();")+'</div>'; 
-    app.innerHTML=html; return; 
+  if(!S.lang){
+    html+=`<h1>${STR.en.title} / ${STR.zh.title}</h1>
+      <div class="q">${STR.en.lang}</div>
+      <div class="choices">${opt(STR.zh.zh,"pushStep(); S.lang='zh'; render()")}${opt(STR.en.en,"pushStep(); S.lang='en'; render()")}</div>`;
+    app.innerHTML=html; return;
   }
 
-  // 选择成人/儿童
-  if(!S.audience){ 
-    html+='<h1>'+t('title')+'</h1><div class="q">'+t('audience')+'</div>';
-    html+='<div class="choices">'+opt(t('adult'),"pushStep(); S.audience='adult'; render();")+opt(t('child'),"pushStep(); S.audience='child'; render();")+'</div>';
-    html+='<div class="footer"><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; 
-    app.innerHTML=html; return; 
+  if(!S.audience){
+    html+=`<h1>${t('title')}</h1><div class="q">${t('audience')}</div>
+      <div class="choices">${opt(t('adult'),"pushStep(); S.audience='adult'; render()")}${opt(t('child'),"pushStep(); S.audience='child'; render()")}</div>
+      <div class="footer"><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+    app.innerHTML=html; return;
   }
 
-  // 成人路径
   if(S.audience==='adult'){
-    if(!S.a_level){ 
-      html+='<h1>'+t('title')+'</h1><div class="q)">'+t('a_level')+'</div>';
-      html+='<div class="choices">'+opt(t('zero'),"pushStep(); S.a_level='zero'; render();")+opt(t('basic'),"pushStep(); S.a_level='basic'; render();")+opt(t('inter'),"pushStep(); S.a_level='inter'; render();")+opt(t('adv'),"pushStep(); S.a_level='adv'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>'; 
-      app.innerHTML=html; return; 
+    if(!S.a_level){
+      html+=`<h1>${t('title')}</h1><div class="q">${t('a_level')}</div>
+        <div class="choices">${opt(t('zero'),"pushStep(); S.a_level='zero'; render()")}${opt(t('basic'),"pushStep(); S.a_level='basic'; render()")}${opt(t('inter'),"pushStep(); S.a_level='inter'; render()")}${opt(t('adv'),"pushStep(); S.a_level='adv'; render()")}</div>
+        <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+      app.innerHTML=html; return;
     }
-    if(!S.group){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('group')+'</div>';
-      html+='<div class="choices">'+opt('1v1',"pushStep(); S.group='1v1'; render();")+opt('1v2',"pushStep(); S.group='1v2'; render();")+opt('1v3',"pushStep(); S.group='1v3'; render();")+opt('1v4',"pushStep(); S.group='1v4'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
+    if(!S.group){
+      html+=`<h1>${t('title')}</h1><div class="q">${t('group')}</div>
+        <div class="choices">${opt('1v1',"pushStep(); S.group='1v1'; render()")}${opt('1v2',"pushStep(); S.group='1v2'; render()")}${opt('1v3',"pushStep(); S.group='1v3'; render()")}${opt('1v4',"pushStep(); S.group='1v4'; render()")}</div>
+        <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+      app.innerHTML=html; return;
     }
-    if(S.group!=='1v1' && !S.join){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('join')+'</div>';
-      html+='<div class="choices">'+opt(t('j_bring'),"pushStep(); S.join='j_bring'; render();")+opt(t('j_join'),"pushStep(); S.join='j_join'; render();")+opt(t('j_none'),"pushStep(); S.join='j_none'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
+    if(S.group!=='1v1' && !S.join){
+      html+=`<h1>${t('title')}</h1><div class="q">${t('join')}</div>
+        <div class="choices">${opt(t('j_bring'),"pushStep(); S.join='j_bring'; render()")}${opt(t('j_join'),"pushStep(); S.join='j_join'; render()")}${opt(t('j_none'),"pushStep(); S.join='j_none'; render()")}</div>
+        <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+      app.innerHTML=html; return;
     }
-    if(!S.coach){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('coach')+'</div>';
-      html+='<div class="choices">'+opt(t('cm'),"pushStep(); S.coach='m'; render();")+opt(t('cf'),"pushStep(); S.coach='f'; render();")+opt(t('ca'),"pushStep(); S.coach='a'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
+    if(!S.coach){
+      html+=`<h1>${t('title')}</h1><div class="q">${t('coach')}</div>
+        <div class="choices">${opt(t('cm'),"pushStep(); S.coach='m'; render()")}${opt(t('cf'),"pushStep(); S.coach='f'; render()")}${opt(t('ca'),"pushStep(); S.coach='a'; render()")}</div>
+        <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+      app.innerHTML=html; return;
     }
-    if(!S.sched){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('sched')+'</div>';
-      html+='<div class="choices">'+opt(t('wd'),"pushStep(); S.sched='wd'; render();")+opt(t('we'),"pushStep(); S.sched='we'; render();")+opt(t('wk'),"pushStep(); S.sched='wk'; render();")+opt(t('flex2'),"pushStep(); S.sched='flex'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
+    if(!S.sched){
+      html+=`<h1>${t('title')}</h1><div class="q">${t('sched')}</div>
+        <div class="choices">${opt(t('wd'),"pushStep(); S.sched='wd'; render()")}${opt(t('we'),"pushStep(); S.sched='we'; render()")}${opt(t('wk'),"pushStep(); S.sched='wk'; render()")}${opt(t('flex2'),"pushStep(); S.sched='flex'; render()")}</div>
+        <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+      app.innerHTML=html; return;
     }
-    if(!S.freq){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('freq')+'</div>';
-      html+='<div class="choices">'+opt(t('f1'),"pushStep(); S.freq='f1'; render();")+opt(t('f2'),"pushStep(); S.freq='f2'; render();")+opt(t('f3'),"pushStep(); S.freq='f3'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
+    if(!S.freq){
+      html+=`<h1>${t('title')}</h1><div class="q">${t('freq')}</div>
+        <div class="choices">${opt(t('f1'),"pushStep(); S.freq='f1'; render()")}${opt(t('f2'),"pushStep(); S.freq='f2'; render()")}${opt(t('f3'),"pushStep(); S.freq='f3'; render()")}</div>
+        <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+      app.innerHTML=html; return;
     }
-    // 成人推荐页
-    var recA=buildAdult(); var mainA=localizeRows([recA.main])[0]; 
-    html+='<h1>'+t('title')+'</h1><div class="q">'+t('rec')+'</div><div class="recgrid">';
-    html+='<div class="card mainrec"><div class="muted">'+t('main')+'</div><div class="q">'+recA.title+' · '+mainA[0]+'</div><div>'+mainA[1]+'</div><div class="muted">'+(mainA[2]||'')+'</div></div>';
-    for(var i=0;i<recA.other.length;i++){ var r=localizeRows([recA.other[i]])[0];
-      html+='<div class="card altrec"><div class="muted">'+t('alt')+'</div><div class="q)">'+recA.title+' · '+r[0]+'</div><div>'+r[1]+'</div><div class="muted">'+(r[2]||'')+'</div></div>';
-    }
-    html+='</div><div class="hr"></div><div class="panel"><h3 style="margin:6px 0)">'+t('price_all')+'</h3><div class="grid">';
-    html+='<div class="card"><div class="q">'+t('adult_zero')+'</div>'+table(PRICE.adult_zero)+'</div>';
-    html+='<div class="card"><div class="q">'+t('adult_basic')+'</div>'+table(PRICE.adult_basic)+'</div>';
-    html+='<div class="card"><div class="q">'+t('adult_full')+'</div>'+table(PRICE.adult_full)+'</div>';
-    html+='</div></div>'+contactBlock();
-    app.innerHTML=html; return; 
+    // 成人推荐
+    const recA=buildAdult(), mainA=localizeRows([recA.main])[0];
+    html+=`<h1>${t('title')}</h1><div class="q">${t('rec')}</div><div class="recgrid">
+      <div class="card mainrec"><div class="muted">${t('main')}</div><div class="q">${recA.title} · ${mainA[0]}</div><div>${mainA[1]}</div><div class="muted">${mainA[2]||''}</div></div>
+      ${recA.other.map(o=>{const r=localizeRows([o])[0];return `<div class="card altrec"><div class="muted">${t('alt')}</div><div class="q">${recA.title} · ${r[0]}</div><div>${r[1]}</div><div class="muted">${r[2]||''}</div></div>`}).join('')}
+    </div>
+    <div class="hr"></div>
+    <div class="panel"><h3 style="margin:6px 0">${t('price_all')}</h3><div class="grid">
+      <div class="card"><div class="q">${t('adult_zero')}</div>${table(PRICE.adult_zero)}</div>
+      <div class="card"><div class="q">${t('adult_basic')}</div>${table(PRICE.adult_basic)}</div>
+      <div class="card"><div class="q">${t('adult_full')}</div>${table(PRICE.adult_full)}</div>
+    </div></div>${contactBlock()}`;
+    app.innerHTML=html; return;
   }
 
   // 儿童路径
-  if(S.audience==='child'){
-    if(!S.k_mode){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('k_mode')+'</div>';
-      html+='<div class="choices">'+opt(t('flex'),"pushStep(); S.k_mode='flex'; render();")+opt(t('longterm'),"pushStep(); S.k_mode='longterm'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
-    }
-    if(!S.k_group){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('group')+'</div>';
-      html+='<div class="choices">'+opt('1v1',"pushStep(); S.k_group='1v1'; render();")+opt('1v2',"pushStep(); S.k_group='1v2'; render();")+opt('1v3',"pushStep(); S.k_group='1v3'; render();")+opt('1v4-6',"pushStep(); S.k_group='1v4-6'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
-    }
-    if(S.k_group!=='1v1' && !S.k_join){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('join')+'</div>';
-      html+='<div class="choices">'+opt(t('j_bring'),"pushStep(); S.k_join='j_bring'; render();")+opt(t('j_join'),"pushStep(); S.k_join='j_join'; render();")+opt(t('j_none'),"pushStep(); S.k_join='j_none'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
-    } else { S.k_join='j_none'; }
-    if(!S.k_coach){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('coach')+'</div>';
-      html+='<div class="choices">'+opt(t('cm'),"pushStep(); S.k_coach='m'; render();")+opt(t('cf'),"pushStep(); S.k_coach='f'; render();")+opt(t('ca'),"pushStep(); S.k_coach='a'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
-    }
-    if(!S.k_sched){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('sched')+'</div>';
-      html+='<div class="choices">'+opt(t('wd'),"pushStep(); S.k_sched='wd'; render();")+opt(t('we'),"pushStep(); S.k_sched='we'; render();")+opt(t('wk'),"pushStep(); S.k_sched='wk'; render();")+opt(t('flex2'),"pushStep(); S.k_sched='flex'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
-    }
-    if(!S.k_freq){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('freq')+'</div>';
-      html+='<div class="choices">'+opt(t('f1'),"pushStep(); S.k_freq='f1'; render();")+opt(t('f2'),"pushStep(); S.k_freq='f2'; render();")+opt(t('f3'),"pushStep(); S.k_freq='f3'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
-    }
-    if(S.k_mode==='longterm' && !S.k_term){ 
-      html+='<h1>'+t('title')+'</h1><div class="q">'+t('term')+'</div>';
-      html+='<div class="choices">'+opt(t('term25'),"pushStep(); S.k_term='25'; render();")+opt(t('term50'),"pushStep(); S.k_term='50'; render();")+'</div>';
-      html+='<div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ '+(S.lang==='en'?'Back':'返回')+'</button><button class="btn ghost" onclick="restartAll()">'+t('restart')+'</button></div>';
-      app.innerHTML=html; return; 
-    }
-    // 儿童推荐页
-    var recK=buildKids(); var mainK=localizeRows([recK.main])[0];
-    html+='<h1>'+t('title')+'</h1><div class="q)">'+t('rec')+'</div><div class="recgrid">';
-    html+='<div class="card mainrec"><div class="muted">'+t('main')+'</div><div class="q">'+recK.title+' · '+mainK[0]+'</div><div>'+mainK[1]+'</div><div class="muted">'+(mainK[2]||'')+'</div></div>';
-    for(var k=0;k<recK.other.length;k++){ if(!recK.other[k]) continue; var r2=localizeRows([recK.other[k]])[0]; if(!r2) continue;
-      html+='<div class="card altrec"><div class="muted)">'+t('alt')+'</div><div class="q">'+recK.title+' · '+r2[0]+'</div><div>'+r2[1]+'</div><div class="muted">'+(r2[2]||'')+'</div></div>';
-    }
-    html+='</div><div class="hr"></div><div class="panel"><h3 style="margin:6px 0)">'+t('price_all')+'</h3><div class="grid">';
-    html+='<div class="card"><div class="q">'+t('kid_flex')+'</div>'+table(PRICE.kid_flex)+'</div>';
-    html+='<div class="card"><div class="q)">'+t('kid_lt')+'</div>'+tableKLT()+'</div>';
-    html+='</div></div>'+contactBlock();
-    app.innerHTML=html; return; 
+  if(!S.k_mode){
+    html+=`<h1>${t('title')}</h1><div class="q">${t('k_mode')}</div>
+      <div class="choices">${opt(t('flex'),"pushStep(); S.k_mode='flex'; render()")}${opt(t('longterm'),"pushStep(); S.k_mode='longterm'; render()")}</div>
+      <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+    app.innerHTML=html; return;
   }
+  if(!S.k_group){
+    html+=`<h1>${t('title')}</h1><div class="q">${t('group')}</div>
+      <div class="choices">${opt('1v1',"pushStep(); S.k_group='1v1'; render()")}${opt('1v2',"pushStep(); S.k_group='1v2'; render()")}${opt('1v3',"pushStep(); S.k_group='1v3'; render()")}${opt('1v4-6',"pushStep(); S.k_group='1v4-6'; render()")}</div>
+      <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+    app.innerHTML=html; return;
+  }
+  if(S.k_group!=='1v1' && !S.k_join){
+    html+=`<h1>${t('title')}</h1><div class="q">${t('join')}</div>
+      <div class="choices">${opt(t('j_bring'),"pushStep(); S.k_join='j_bring'; render()")}${opt(t('j_join'),"pushStep(); S.k_join='j_join'; render()")}${opt(t('j_none'),"pushStep(); S.k_join='j_none'; render()")}</div>
+      <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+    app.innerHTML=html; return;
+  } else { S.k_join='j_none'; }
+  if(!S.k_coach){
+    html+=`<h1>${t('title')}</h1><div class="q">${t('coach')}</div>
+      <div class="choices">${opt(t('cm'),"pushStep(); S.k_coach='m'; render()")}${opt(t('cf'),"pushStep(); S.k_coach='f'; render()")}${opt(t('ca'),"pushStep(); S.k_coach='a'; render()")}</div>
+      <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+    app.innerHTML=html; return;
+  }
+  if(!S.k_sched){
+    html+=`<h1>${t('title')}</h1><div class="q">${t('sched')}</div>
+      <div class="choices">${opt(t('wd'),"pushStep(); S.k_sched='wd'; render()")}${opt(t('we'),"pushStep(); S.k_sched='we'; render()")}${opt(t('wk'),"pushStep(); S.k_sched='wk'; render()")}${opt(t('flex2'),"pushStep(); S.k_sched='flex'; render()")}</div>
+      <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+    app.innerHTML=html; return;
+  }
+  if(!S.k_freq){
+    html+=`<h1>${t('title')}</h1><div class="q">${t('freq')}</div>
+      <div class="choices">${opt(t('f1'),"pushStep(); S.k_freq='f1'; render()")}${opt(t('f2'),"pushStep(); S.k_freq='f2'; render()")}${opt(t('f3'),"pushStep(); S.k_freq='f3'; render()")}</div>
+      <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+    app.innerHTML=html; return;
+  }
+  if(S.k_mode==='longterm' && !S.k_term){
+    html+=`<h1>${t('title')}</h1><div class="q">${t('term')}</div>
+      <div class="choices">${opt(t('term25'),"pushStep(); S.k_term='25'; render()")}${opt(t('term50'),"pushStep(); S.k_term='50'; render()")}</div>
+      <div class="footer"><button class="btn ghost" onclick="goBack()">◀︎ ${(S.lang==='en'?'Back':'返回')}</button><button class="btn ghost" onclick="restartAll()">${t('restart')}</button></div>`;
+    app.innerHTML=html; return;
+  }
+  // 儿童推荐
+  const recK=buildKids(), mainK=localizeRows([recK.main])[0];
+  html+=`<h1>${t('title')}</h1><div class="q">${t('rec')}</div><div class="recgrid">
+    <div class="card mainrec"><div class="muted">${t('main')}</div><div class="q">${recK.title} · ${mainK[0]}</div><div>${mainK[1]}</div><div class="muted">${mainK[2]||''}</div></div>
+    ${recK.other.map(o=>{if(!o) return ''; const r=localizeRows([o])[0]; return `<div class="card altrec"><div class="muted">${t('alt')}</div><div class="q">${recK.title} · ${r[0]}</div><div>${r[1]}</div><div class="muted">${r[2]||''}</div></div>`}).join('')}
+  </div>
+  <div class="hr"></div>
+  <div class="panel"><h3 style="margin:6px 0">${t('price_all')}</h3><div class="grid">
+    <div class="card"><div class="q">${t('kid_flex')}</div>${table(PRICE.kid_flex)}</div>
+    <div class="card"><div class="q">${t('kid_lt')}</div>${tableKLT()}</div>
+  </div></div>${contactBlock()}`;
+  app.innerHTML=html; return;
 }
 
 // 初始渲染
