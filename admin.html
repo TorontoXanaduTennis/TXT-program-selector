@@ -18,6 +18,7 @@
   th{background:#f3f4f6}
   .muted{color:#6b7280}
   .rowhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#fee2e2;color:#991b1b;font-size:12px;margin-left:8px}
 </style>
 </head>
 <body>
@@ -26,8 +27,8 @@
   <div id="login" class="card">
     <h1>管理员登录</h1>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <input id="u" placeholder="用户名" />
-      <input id="p" type="password" placeholder="密码" />
+      <input id="u" placeholder="用户名（txtadmin）" />
+      <input id="p" type="password" placeholder="密码（202412）" />
       <button class="btn" onclick="login()">登录</button>
     </div>
     <div id="msg" class="muted" style="margin-top:8px"></div>
@@ -38,7 +39,7 @@
     <div class="card header">
       <h1>报课记录</h1>
       <div style="display:flex;gap:8px">
-        <button class="btn" onclick="load()">刷新</button>
+        <button class="btn" onclick="loadList()">刷新</button>
       </div>
     </div>
     <div id="list"></div>
@@ -46,66 +47,93 @@
 </div>
 
 <script>
-// ===== API（把 URL 换成你的 /exec）
-const API_URL = 'https://script.google.com/macros/s/AKfycbxx1E6Ao9pBv1Ml3uyAe6RTmNfE9b-vcdia0QG6eCKIjnmcvjGAo5wmjbEHdIqLvU4I/exec';
+// ====== 把此处替换为你的 Apps Script /exec 地址 ======
+const API_URL = 'https://script.google.com/macros/s/你的_EXEC_ID/exec';
 
+// 使用 text/plain 避免 CORS 预检
 async function apiList(){
-  const res = await fetch(API_URL);
-  return res.json(); // { ok:true, list:[...] }
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'list' })
+  });
+  const text = await res.text();
+  try{ return JSON.parse(text); }catch{ return { ok:false, error:'NOT_JSON', raw:text }; }
 }
+
 async function apiDelete(ticket){
   const res = await fetch(API_URL, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ action:'delete', ticket })
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'delete', ticket })
   });
-  return res.json(); // { ok:true }
+  const text = await res.text();
+  try{ return JSON.parse(text); }catch{ return { ok:false, error:'NOT_JSON', raw:text }; }
 }
 
-// 登录
+// ====== 登录 ======
 function login(){
   const u=document.getElementById('u').value.trim();
   const p=document.getElementById('p').value.trim();
   if(u==='txtadmin' && p==='202412'){
     document.getElementById('login').style.display='none';
     document.getElementById('panel').style.display='block';
-    load();
+    loadList();
   }else{
     document.getElementById('msg').textContent='授权失败';
   }
 }
 
-// 载入并渲染（远程读取）
-async function load(){
+// ====== 渲染列表 ======
+async function loadList(){
+  const box = document.getElementById('list');
+  box.innerHTML = '<div class="card">加载中…</div>';
+
   try{
     const j = await apiList();
-    if(!j.ok){ document.getElementById('list').innerHTML='<div class="card">读取失败</div>'; return; }
-    const list = j.list || [];
+    if(!j.ok){
+      box.innerHTML = `<div class="card">读取失败：${escapeHTML(j.error||'')}</div>`;
+      console.error('list error:', j);
+      return;
+    }
 
-    // 疑重判断：同名 +（同微信 或 同邮箱）
-    const seen=new Map();
-    list.forEach(r=>{
-      const k1=`${r.name}|${r.wechat||''}`;
-      const k2=`${r.name}|${r.email||''}`;
-      seen.set(k1,(seen.get(k1)||0)+1);
-      seen.set(k2,(seen.get(k2)||0)+1);
+    const list = Array.isArray(j.data)? j.data : [];
+    // 疑重：同姓名 +（同微信 或 同邮箱）
+    const seen = new Map();
+    for(const r of list){
+      const k1 = `${(r.name||'').trim()}|${(r.wechat||'').trim()}`;
+      const k2 = `${(r.name||'').trim()}|${(r.email||'').trim()}`;
+      seen.set(k1, (seen.get(k1)||0)+1);
+      seen.set(k2, (seen.get(k2)||0)+1);
+    }
+
+    // 按时间倒序
+    const sorted = list.slice().sort((a,b)=>{
+      const ta = new Date(a.ts).getTime() || 0;
+      const tb = new Date(b.ts).getTime() || 0;
+      return tb - ta;
     });
 
-    const rows=list.slice().reverse().map(r=>{
-      const suspected = (seen.get(`${r.name}|${r.wechat||''}`)>1) || (seen.get(`${r.name}|${r.email||''}`)>1);
-      const ticketDisp = r.ticket + (suspected ? '（疑重）' : '');
-      const ts = new Date(r.ts).toLocaleString();
+    const html = sorted.map(r=>{
+      const suspected = (seen.get(`${(r.name||'').trim()}|${(r.wechat||'').trim()}`)>1) ||
+                        (seen.get(`${(r.name||'').trim()}|${(r.email||'').trim()}`)>1);
+      const ticketDisp = escapeHTML(r.ticket||'');
+      const ts = r.ts ? new Date(r.ts).toLocaleString() : '';
 
       return `
       <div class="card">
         <div class="rowhead">
-          <div><b>咨询号码：</b>${escapeHTML(ticketDisp)}</div>
-          <button class="btn red" onclick="confirmDelete('${escapeAttr(r.ticket)}')">删除</button>
+          <div>
+            <b>咨询号码：</b>${ticketDisp}
+            ${suspected?'<span class="badge">疑重</span>':''}
+          </div>
+          <button class="btn red" onclick="confirmDelete('${ticketDisp}')">删除</button>
         </div>
         <table>
           <tr><th>客户姓名</th><td>${escapeHTML(r.name||'')}</td></tr>
-          <tr><th>微信号</th><td>${escapeHTML(r.wechat||'n/a')}</td></tr>
+          <tr><th>微信号</th><td>${escapeHTML((r.wechat===undefined||r.wechat===null)?'':r.wechat)||'n/a'}</td></tr>
           <tr><th>邮箱</th><td>${escapeHTML(r.email||'')}</td></tr>
+          <tr><th>电话</th><td>${escapeHTML(r.phone||'')}</td></tr>
           <tr><th>最佳匹配推荐</th><td>${escapeHTML(r.best||'')}</td></tr>
           <tr><th>备注</th><td>${escapeHTML(r.notes||'')}</td></tr>
           <tr><th>报课详细选项</th><td>${escapeHTML(r.detail||'')}</td></tr>
@@ -114,39 +142,34 @@ async function load(){
       </div>`;
     }).join('');
 
-    document.getElementById('list').innerHTML = rows || '<div class="card">暂无记录</div>';
+    box.innerHTML = html || '<div class="card">暂无记录</div>';
   }catch(err){
     console.error(err);
-    document.getElementById('list').innerHTML='<div class="card">读取失败（网络或权限问题）</div>';
+    box.innerHTML = '<div class="card">网络异常或接口错误</div>';
   }
 }
 
-// 删除确认 + 远程删除
-function confirmDelete(ticket){
+// ====== 删除确认 ======
+async function confirmDelete(ticket){
   const phrase = prompt('请再次确认是否删除该条记录？\n输入【确认删除】以继续，或点取消退出。');
   if(phrase===null) return;
-  if(phrase.trim()!=='确认删除'){
-    alert('口令不正确，已取消删除。');
-    return;
-  }
-  deleteByTicket(ticket);
-}
-async function deleteByTicket(ticket){
+  if(phrase.trim()!=='确认删除'){ alert('口令不正确，已取消删除。'); return; }
+
   try{
     const j = await apiDelete(ticket);
-    if(j.ok){ load(); } else { alert('删除失败'); }
+    if(!j.ok){ alert('删除失败：' + (j.error||'')); return; }
+    loadList();
   }catch(err){
     console.error(err);
     alert('网络异常，删除失败');
   }
 }
 
-// 转义
+// ====== HTML 转义 ======
 function escapeHTML(s){
-  return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-}
-function escapeAttr(s){
-  return String(s).replace(/['"\\]/g, c=>({'"':'&quot;',"'":'&#39;','\\':'\\\\'}[c]));
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
 }
 </script>
 </body>
