@@ -46,24 +46,21 @@
 </div>
 
 <script>
+// ===== API（把 URL 换成你的 /exec）
 const API_URL = 'https://script.google.com/macros/s/AKfycbw4fkM2ybBtJ53KrJ0hnrc7qm0-l4Curpe1F7pEIFBtdRzraYJN4s8AhypuC3oP9PEI/exec';
 
 async function apiList(){
-  // 期望 Apps Script GET 返回：{ok:true, list:[{ticket,name,wechat,email,best,notes,detail,ts}]}
   const res = await fetch(API_URL);
-  return res.json();
+  return res.json(); // { ok:true, list:[...] }
 }
 async function apiDelete(ticket){
-  // 期望 Apps Script 接口：POST {action:'delete', ticket:'XT00001'} -> {ok:true}
   const res = await fetch(API_URL, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ action:'delete', ticket })
   });
-  return res.json();
+  return res.json(); // { ok:true }
 }
-
-const STORAGE_KEY='xanadu_submissions';
 
 // 登录
 function login(){
@@ -78,14 +75,14 @@ function login(){
   }
 }
 
-// 载入并渲染
+// 载入并渲染（远程读取）
 async function load(){
   try{
     const j = await apiList();
     if(!j.ok){ document.getElementById('list').innerHTML='<div class="card">读取失败</div>'; return; }
     const list = j.list || [];
 
-    // 疑重判断（同名 +（同微信 或 同邮箱））
+    // 疑重判断：同名 +（同微信 或 同邮箱）
     const seen=new Map();
     list.forEach(r=>{
       const k1=`${r.name}|${r.wechat||''}`;
@@ -124,55 +121,27 @@ async function load(){
   }
 }
 
-
-  // 最新在前
-  const rows=list.slice().reverse().map(r=>{
-    const suspected = (seen.get(`${r.name}|${r.wechat||''}`)>1) || (seen.get(`${r.name}|${r.email||''}`)>1);
-    const ticketDisp = r.ticket + (suspected ? '（疑重）' : '');
-    const ts = new Date(r.ts).toLocaleString();
-
-    return `
-    <div class="card">
-      <div class="rowhead">
-        <div><b>咨询号码：</b>${escapeHTML(ticketDisp)}</div>
-        <button class="btn red" onclick="confirmDelete('${escapeAttr(r.ticket)}')">删除</button>
-      </div>
-      <table>
-        <tr><th>客户姓名</th><td>${escapeHTML(r.name||'')}</td></tr>
-        <tr><th>微信号</th><td>${escapeHTML(r.wechat||'n/a')}</td></tr>
-        <tr><th>邮箱</th><td>${escapeHTML(r.email||'')}</td></tr>
-        <tr><th>最佳匹配推荐</th><td>${escapeHTML(r.best||'')}</td></tr>
-        <tr><th>备注</th><td>${escapeHTML(r.notes||'')}</td></tr>
-        <tr><th>报课详细选项</th><td>${escapeHTML(r.detail||'')}</td></tr>
-        <tr><th>时间</th><td class="muted">${escapeHTML(ts)}</td></tr>
-      </table>
-    </div>`;
-  }).join('');
-
-  document.getElementById('list').innerHTML = rows || '<div class="card">暂无记录</div>';
-}
-
-// 删除确认
+// 删除确认 + 远程删除
 function confirmDelete(ticket){
   const phrase = prompt('请再次确认是否删除该条记录？\n输入【确认删除】以继续，或点取消退出。');
-  if(phrase===null) return; // 取消
+  if(phrase===null) return;
   if(phrase.trim()!=='确认删除'){
     alert('口令不正确，已取消删除。');
     return;
   }
   deleteByTicket(ticket);
 }
-
-// 真正删除
-function deleteByTicket(ticket){
-  const list=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
-  const next=list.filter(r=>r.ticket!==ticket);
-  // 这里修复了引号错误
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  load();
+async function deleteByTicket(ticket){
+  try{
+    const j = await apiDelete(ticket);
+    if(j.ok){ load(); } else { alert('删除失败'); }
+  }catch(err){
+    console.error(err);
+    alert('网络异常，删除失败');
+  }
 }
 
-// 转义工具
+// 转义
 function escapeHTML(s){
   return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
