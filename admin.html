@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Xanadu 报课记录管理</title>
+<style>
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f7f7f7;color:#111}
+  .wrap{max-width:1000px;margin:24px auto;padding:0 16px}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 14px #0000000d;padding:16px;margin-bottom:16px}
+  h1{margin:0 0 10px}
+  input{padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px}
+  .btn{padding:10px 14px;border:none;border-radius:10px;background:#0f766e;color:#fff;cursor:pointer}
+  .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse}
+  th,td{border:1px solid #e5e7eb;padding:8px;text-align:left;vertical-align:top}
+  th{background:#f3f4f6}
+  .muted{color:#6b7280}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="login" class="card">
+    <h1>管理员登录</h1>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="u" placeholder="用户名" />
+      <input id="p" type="password" placeholder="密码" />
+      <button class="btn" onclick="login()">登录</button>
+    </div>
+    <div id="msg" class="muted" style="margin-top:8px"></div>
+  </div>
+
+  <div id="panel" style="display:none">
+    <div class="card header">
+      <h1>报课记录</h1>
+      <button class="btn" onclick="load()">刷新</button>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY='xanadu_submissions';
+function login(){
+  const u=document.getElementById('u').value.trim();
+  const p=document.getElementById('p').value.trim();
+  if(u==='txtadmin' && p==='202412'){
+    document.getElementById('login').style.display='none';
+    document.getElementById('panel').style.display='block';
+    load();
+  }else{
+    document.getElementById('msg').textContent='授权失败';
+  }
+}
+
+function load(){
+  const list=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+  // 建索引用于疑重判断
+  const seen=new Map(); // key: name|wechat|email -> count
+  list.forEach(r=>{
+    const key1=`${r.name}|${r.wechat||''}`;
+    const key2=`${r.name}|${r.email||''}`;
+    seen.set(key1,(seen.get(key1)||0)+1);
+    seen.set(key2,(seen.get(key2)||0)+1);
+  });
+
+  const html=list.slice().reverse().map(r=>{
+    const suspected = (seen.get(`${r.name}|${r.wechat||''}`)>1) || (seen.get(`${r.name}|${r.email||''}`)>1);
+    const ticket = r.ticket + (suspected ? '（疑重）' : '');
+    return `
+    <div class="card">
+      <table>
+        <tr><th>咨询号码</th><td>${ticket}</td></tr>
+        <tr><th>客户姓名</th><td>${r.name||''}</td></tr>
+        <tr><th>微信号</th><td>${r.wechat||'n/a'}</td></tr>
+        <tr><th>邮箱</th><td>${r.email||''}</td></tr>
+        <tr><th>最佳匹配推荐</th><td>${r.best||''}</td></tr>
+        <tr><th>备注</th><td>${r.notes||''}</td></tr>
+        <tr><th>报课详细选项</th><td>${r.detail||''}</td></tr>
+        <tr><th>时间</th><td class="muted">${new Date(r.ts).toLocaleString()}</td></tr>
+      </table>
+    </div>`;
+  }).join('');
+
+  document.getElementById('list').innerHTML = html || '<div class="card">暂无记录</div>';
+}
+</script>
+</body>
+</html>
