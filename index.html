@@ -84,6 +84,8 @@ const K_LT={
   '1v3':{'1pw':{'25':['$3000','(120/hr)'],'50':['$5850','(117/hr)']},'2pw':{'25':['$5750','(115/hr)'],'50':['$11000','(110/hr)']},'3pw':{'25':['$7875','(105/hr)'],'50':['$15000','(100/hr)']}},
   '1v4-6':{'1pw':{'25':['$3650','(146/hr)'],'50':['$7150','(143/hr)']},'2pw':{'25':['$7050','(141/hr)'],'50':['$13650','(136.5/hr)']},'3pw':{'25':['$9750','(130/hr)'],'50':['$18750','(125/hr)']}}
 };
+
+  
 // ===== 后端 API
 const API_URL = 'https://script.google.com/macros/s/AKfycbw4fkM2ybBtJ53KrJ0hnrc7qm0-l4Curpe1F7pEIFBtdRzraYJN4s8AhypuC3oP9PEI/exec';
 
@@ -201,52 +203,55 @@ function contactBlock(){
     </div>`;
 }
 async function submitLead(){
-  const name=document.getElementById('c_name').value.trim();
-  const phone=document.getElementById('c_phone').value.trim();
-  const email=document.getElementById('c_email').value.trim();
-  const we=document.getElementById('c_wechat');
-  if(!name||!phone||!email){
-    alert(S.lang==='zh'?'请填写姓名/电话/邮箱':'Please fill name/phone/email');
+  const name = document.getElementById('c_name').value.trim();
+  const phone = document.getElementById('c_phone').value.trim();
+  const email = document.getElementById('c_email').value.trim();
+  const we = document.getElementById('c_wechat');
+
+  if(!name || !phone || !email){
+    alert(S.lang==='zh' ? '请填写姓名/电话/邮箱' : 'Please fill name/phone/email');
     return;
   }
   if(S.lang==='zh' && we && !we.value.trim()){
-    alert('请填写微信号'); return;
+    alert('请填写微信号');
+    return;
   }
 
-  // 计算最佳匹配（沿用你已有逻辑）
-  const rec=(S.audience==='adult')?buildAdult():buildKids();
-  const main=localizeRows([rec.main])[0];
-  const best=`${rec.title} · ${main[0]} · ${main[1]}${main[2]?(' · '+main[2]):''}`;
+  // 计算最佳匹配（沿用你现有 buildAdult/buildKids）
+  const rec  = (S.audience==='adult') ? buildAdult() : buildKids();
+  const main = localizeRows([rec.main])[0];
+  const best = `${rec.title} · ${main[0]} · ${main[1]}${main[2] ? (' · '+main[2]) : ''}`;
 
-  // 选项摘要（沿用你已有 chosenSummary）
-  const detail = chosenSummary();
+  // 选项摘要（你项目里已有的 chosenSummary，如果没有，可先用空字符串代替）
+  const detail = (typeof chosenSummary === 'function') ? chosenSummary() : '';
 
   // 发送到后端（ticket 由后端生成）
   const payload = {
     name,
-    wechat:(S.lang==='zh'?(we?we.value.trim():''):'n/a'),
+    wechat: (S.lang==='zh' ? (we ? we.value.trim() : '') : 'n/a'),
     email,
     best,
-    notes:(document.getElementById('c_notes').value||'').trim(),
+    notes: (document.getElementById('c_notes').value || '').trim(),
     detail,
-    ts:new Date().toISOString(),
+    ts: new Date().toISOString(),
     phone
   };
 
   try{
     const j = await apiCreate(payload);
     if(!j.ok){
-      alert(S.lang==='zh'?'提交失败，请稍后再试':'Submit failed, please try again.');
+      alert(S.lang==='zh' ? '提交失败，请稍后再试' : 'Submit failed, please try again.');
       return;
     }
-    S.lastTicket = j.ticket;   // 后端生成的咨询号
-    S.submitted = true;
+    S.lastTicket = j.ticket;   // 使用后端返回的咨询号
+    S.submitted  = true;
     render();
   }catch(err){
     console.error(err);
-    alert(S.lang==='zh'?'网络异常，请稍后再试':'Network error, please try again later.');
+    alert(S.lang==='zh' ? '网络异常，请稍后再试' : 'Network error, please try again later.');
   }
 }
+
 
 
 // 选项按钮
