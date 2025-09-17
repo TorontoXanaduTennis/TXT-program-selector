@@ -52,7 +52,7 @@
 <script>
 /* ============ 配置 ============ */
 // 替换为你 Apps Script 部署后的 /exec URL
-const API_URL = 'https://script.google.com/macros/s/AKfycbxiwEAjcWKEp-PNTh508P0_dK4bKCDS4Z2rtroNV3WHo5pZ-Gqfq4Af3NcE5i_mQ88/exec';
+const API_URL = 'https://script.google.com/macros/s/你的EXEC地址/exec';
 
 // 存 token 的 key
 const TOKEN_KEY = 'xanadu_admin_token';
@@ -73,25 +73,31 @@ function clearToken(){ sessionStorage.removeItem(TOKEN_KEY); }
 async function apiAuth(user, pass){
   const res = await fetch(API_URL, {
     method:'POST',
-    headers:{ 'Content-Type':'application/json' },
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // 避免预检
     body: JSON.stringify({ action:'auth', user, pass })
   });
-  return res.json();
+  const text = await res.text();
+  try{ return JSON.parse(text); }
+  catch{ return { ok:false, error:'NOT_JSON', raw:text.slice(0,200) }; }
 }
 // 列表
 async function apiList(token){
   const url = `${API_URL}?action=list&auth=${encodeURIComponent(token)}&_=${Date.now()}`;
   const res = await fetch(url, { method:'GET' });
-  return res.json();
+  const text = await res.text();
+  try{ return JSON.parse(text); }
+  catch{ return { ok:false, error:'NOT_JSON', raw:text.slice(0,200) }; }
 }
 // 删除
 async function apiDelete(ticket, token){
   const res = await fetch(API_URL, {
     method:'POST',
-    headers:{ 'Content-Type':'application/json' },
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
     body: JSON.stringify({ action:'delete', ticket, auth:token })
   });
-  return res.json();
+  const text = await res.text();
+  try{ return JSON.parse(text); }
+  catch{ return { ok:false, error:'NOT_JSON', raw:text.slice(0,200) }; }
 }
 
 /* ============ 登录 / 退出 ============ */
@@ -197,8 +203,7 @@ async function confirmDelete(ticket){
     const j = await apiDelete(ticket, token);
     if(!j.ok){
       if(j.error && String(j.error).includes('AUTH')){ alert('口令无效或已过期，请重新登录。'); logout(); return; }
-      alert('删除失败：' + (j.error||''));
-      return;
+      alert('删除失败：' + (j.error||'')); return;
     }
     loadList();
   }catch(err){
