@@ -24,6 +24,7 @@
 </head>
 <body>
 <div class="wrap">
+
   <!-- 登录卡片 -->
   <div id="login" class="card" style="display:none">
     <h1>管理员登录</h1>
@@ -49,182 +50,202 @@
 </div>
 
 <script>
-/* ====== 你的 Apps Script /exec 地址 ====== */
+/* ============ 配置 ============ */
+// 替换为你的 Apps Script /exec 地址
 const API_URL = 'https://script.google.com/macros/s/AKfycbxtv5e_Sk3vJpMhmAku9UP7tisdnsmN_zG00_8p7OTRqwfJ3ojS5E53AUAoPB3reToG/exec';
+// 可选：固定用户名密码占位提示（真实用户名/密码存在 Apps Script 的 Script Properties 里）
+const PLACEHOLDER_USER = 'txtadmin';
+const PLACEHOLDER_PASS = '202412';
 
-/* ====== token 存储键 ====== */
+// 存 token 的 key
 const TOKEN_KEY = 'xanadu_admin_token';
 
-/* ====== 工具函数 ====== */
-const vstr = x => (x==null ? '' : String(x));
+/* ============ 小工具 ============ */
+function vstr(x){ return (x===undefined||x===null) ? '' : String(x); }
 function escapeHTML(s){
   return String(s==null?'':s).replace(/[&<>"']/g, c=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[c]));
 }
 function getToken(){ return sessionStorage.getItem(TOKEN_KEY) || ''; }
-function setToken(t){ if(t) sessionStorage.setItem(TOKEN_KEY, t); }
+function setToken(t){ sessionStorage.setItem(TOKEN_KEY, t||''); }
 function clearToken(){ sessionStorage.removeItem(TOKEN_KEY); }
 
-/* ====== API 封装（带 token）====== */
+/* ============ API 封装 ============ */
+// 认证：POST {action:'auth', user, pass} => {ok:true, token}
 async function apiAuth(user, pass){
   const res = await fetch(API_URL, {
     method:'POST',
     headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // 避免预检
     body: JSON.stringify({ action:'auth', user, pass })
   });
-  const txt = await res.text();
-  try{ return JSON.parse(txt); }
-  catch{ return { ok:false, error:'NOT_JSON', raw:txt }; }
+  const text = await res.text();
+  try{ return JSON.parse(text); }
+  catch{ return { ok:false, error:'NOT_JSON', raw:text.slice(0,800) }; }
 }
 
-async function apiList(){
-  const url = `${API_URL}?action=list&auth=${encodeURIComponent(getToken())}&_=${Date.now()}`;
+// 列表：GET /exec?action=list&auth=TOKEN
+async function apiList(token){
+  const url = `${API_URL}?action=list&auth=${encodeURIComponent(token)}&_=${Date.now()}`;
   const res = await fetch(url, { method:'GET' });
-  const txt = await res.text();
-  if(!res.ok) return { ok:false, error:`HTTP ${res.status}`, raw:txt };
-  try{ return JSON.parse(txt); }
-  catch{ return { ok:false, error:'NOT_JSON', raw:txt.slice(0,800) }; }
+  const text = await res.text();
+  if(!res.ok) return { ok:false, error:`HTTP ${res.status}`, raw:text.slice(0,800) };
+  try{ return JSON.parse(text); }
+  catch{ return { ok:false, error:'NOT_JSON', raw:text.slice(0,800) }; }
 }
 
-async function apiDelete(ticket){
+// 删除：POST {action:'delete', ticket, auth:TOKEN}
+async function apiDelete(ticket, token){
   const res = await fetch(API_URL, {
     method:'POST',
     headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action:'delete', ticket, auth:getToken() })
+    body: JSON.stringify({ action:'delete', ticket, auth:token })
   });
-  const txt = await res.text();
-  try{ return JSON.parse(txt); }
-  catch{ return { ok:false, error:'NOT_JSON', raw:txt.slice(0,800) }; }
+  const text = await res.text();
+  try{ return JSON.parse(text); }
+  catch{ return { ok:false, error:'NOT_JSON', raw:text.slice(0,800) }; }
 }
 
-/* ====== 登录 / 退出 ====== */
+/* ============ 登录 / 退出 ============ */
 async function login(){
   const u = document.getElementById('u').value.trim();
   const p = document.getElementById('p').value.trim();
-  const msg = document.getElementById('msg');
-  msg.textContent = '登录中…';
-  const j = await apiAuth(u, p);
-  if(!j.ok){
-    msg.textContent = '授权失败：' + (j.error || '未知错误');
-    return;
+  document.getElementById('msg').textContent = '登录中…';
+
+  try{
+    const j = await apiAuth(u, p);
+    if(!j.ok){
+      document.getElementById('msg').textContent = '授权失败：' + (j.error||'');
+      return;
+    }
+    setToken(j.token || '');
+    document.getElementById('login').style.display='none';
+    document.getElementById('panel').style.display='block';
+    loadList();
+  }catch(err){
+    document.getElementById('msg').textContent = '网络异常：' + String(err);
   }
-  setToken(j.token);
-  document.getElementById('login').style.display='none';
-  document.getElementById('panel').style.display='block';
-  loadList();
 }
 
 function logout(){
   clearToken();
   document.getElementById('panel').style.display='none';
   document.getElementById('login').style.display='block';
-  document.getElementById('msg').textContent='';
+  document.getElementById('msg').textContent = '';
 }
 
-/* ====== 渲染列表 ====== */
+/* ============ 列表渲染 ============ */
 async function loadList(){
+  const token = getToken();
   const box = document.getElementById('list');
   box.innerHTML = '<div class="card">加载中…</div>';
 
-  const j = await apiList();
-
-  if(!j.ok){
-    // token 失效：让用户重新登录
-    if(j.error === 'AUTH_REQUIRED' || j.error === 'AUTH_INVALID'){
-      clearToken();
-      document.getElementById('panel').style.display='none';
-      document.getElementById('login').style.display='block';
-      document.getElementById('msg').textContent='登录已过期，请重新登录';
-      return;
-    }
-    box.innerHTML = `
-      <div class="card">
-        <div><b>读取失败：</b>${escapeHTML(j.error||'')}</div>
-        ${j.raw ? `<div class="err" style="margin-top:8px">${escapeHTML(j.raw)}</div>` : ''}
-      </div>`;
-    console.error('list error:', j);
+  if(!token){
+    box.innerHTML = '<div class="card">未登录或口令失效，请重新登录。</div>';
+    logout();
     return;
   }
 
-  const list = Array.isArray(j.data)? j.data : [];
+  try{
+    const j = await apiList(token);
+    if(!j.ok){
+      // 口令失效时（AUTH_REQUIRED），提示重新登录
+      if(j.error && String(j.error).includes('AUTH')){
+        box.innerHTML = '<div class="card">口令无效或已过期，请重新登录。</div>';
+        logout();
+        return;
+      }
+      box.innerHTML = `
+        <div class="card">
+          <div><b>读取失败：</b>${escapeHTML(j.error||'')}</div>
+          ${j.raw ? `<div class="err" style="margin-top:8px">${escapeHTML(j.raw)}</div>` : ''}
+        </div>`;
+      return;
+    }
 
-  // 疑重：同姓名 +（同微信 或 同邮箱）
-  const seen = new Map();
-  for(const r of list){
-    const k1 = `${vstr(r.name).trim()}|${vstr(r.wechat).trim()}`;
-    const k2 = `${vstr(r.name).trim()}|${vstr(r.email).trim()}`;
-    seen.set(k1, (seen.get(k1)||0)+1);
-    seen.set(k2, (seen.get(k2)||0)+1);
-  }
+    const list = Array.isArray(j.data) ? j.data : [];
 
-  // 时间倒序
-  const sorted = list.slice().sort((a,b)=>{
-    const ta = new Date(vstr(a.ts)).getTime() || 0;
-    const tb = new Date(vstr(b.ts)).getTime() || 0;
-    return tb - ta;
-  });
+    // 疑重：同姓名 +（同微信 或 同邮箱）
+    const seen = new Map();
+    for(const r of list){
+      const k1 = `${vstr(r.name).trim()}|${vstr(r.wechat).trim()}`;
+      const k2 = `${vstr(r.name).trim()}|${vstr(r.email).trim()}`;
+      seen.set(k1,(seen.get(k1)||0)+1);
+      seen.set(k2,(seen.get(k2)||0)+1);
+    }
 
-  const html = sorted.map(r=>{
-    const name   = vstr(r.name).trim();
-    const wechat = vstr(r.wechat).trim();
-    const email  = vstr(r.email).trim();
-    const phone  = vstr(r.phone).trim();
-    const best   = vstr(r.best);
-    const notes  = vstr(r.notes);
-    const detail = vstr(r.detail);
-    const ticket = vstr(r.ticket);
-    const suspected = (seen.get(`${name}|${wechat}`)>1) || (seen.get(`${name}|${email}`)>1);
-    const ts = r.ts ? new Date(vstr(r.ts)).toLocaleString() : '';
+    // 时间倒序
+    const sorted = list.slice().sort((a,b)=>{
+      const ta = new Date(vstr(a.ts)).getTime()||0;
+      const tb = new Date(vstr(b.ts)).getTime()||0;
+      return tb - ta;
+    });
 
-    return `
-    <div class="card">
-      <div class="rowhead">
-        <div>
-          <b>咨询号码：</b>${escapeHTML(ticket)}
-          ${suspected?'<span class="badge">疑重</span>':''}
+    const html = sorted.map(r=>{
+      const name   = vstr(r.name).trim();
+      const wechat = vstr(r.wechat).trim();
+      const email  = vstr(r.email).trim();
+      const phone  = vstr(r.phone).trim();
+      const best   = vstr(r.best);
+      const notes  = vstr(r.notes);
+      const detail = vstr(r.detail);
+      const ticket = vstr(r.ticket);
+      const suspected = (seen.get(`${name}|${wechat}`)>1) || (seen.get(`${name}|${email}`)>1);
+      const ts = r.ts ? new Date(vstr(r.ts)).toLocaleString() : '';
+
+      return `
+      <div class="card">
+        <div class="rowhead">
+          <div><b>咨询号码：</b>${escapeHTML(ticket)}${suspected?'<span class="badge">疑重</span>':''}</div>
+          <button class="btn red" onclick="confirmDelete('${escapeHTML(ticket)}')">删除</button>
         </div>
-        <button class="btn red" onclick="confirmDelete('${escapeHTML(ticket)}')">删除</button>
-      </div>
-      <table>
-        <tr><th>客户姓名</th><td>${escapeHTML(name)}</td></tr>
-        <tr><th>微信号</th><td>${escapeHTML(wechat || 'n/a')}</td></tr>
-        <tr><th>邮箱</th><td>${escapeHTML(email)}</td></tr>
-        <tr><th>电话</th><td>${escapeHTML(phone)}</td></tr>
-        <tr><th>最佳匹配推荐</th><td>${escapeHTML(best)}</td></tr>
-        <tr><th>备注</th><td>${escapeHTML(notes)}</td></tr>
-        <tr><th>报课详细选项</th><td>${escapeHTML(detail)}</td></tr>
-        <tr><th>时间</th><td class="muted">${escapeHTML(ts)}</td></tr>
-      </table>
-    </div>`;
-  }).join('');
+        <table>
+          <tr><th>客户姓名</th><td>${escapeHTML(name)}</td></tr>
+          <tr><th>微信号</th><td>${escapeHTML(wechat || 'n/a')}</td></tr>
+          <tr><th>邮箱</th><td>${escapeHTML(email)}</td></tr>
+          <tr><th>电话</th><td>${escapeHTML(phone)}</td></tr>
+          <tr><th>最佳匹配推荐</th><td>${escapeHTML(best)}</td></tr>
+          <tr><th>备注</th><td>${escapeHTML(notes)}</td></tr>
+          <tr><th>报课详细选项</th><td>${escapeHTML(detail)}</td></tr>
+          <tr><th>时间</th><td class="muted">${escapeHTML(ts)}</td></tr>
+        </table>
+      </div>`;
+    }).join('');
 
-  box.innerHTML = html || '<div class="card">暂无记录</div>';
+    box.innerHTML = html || '<div class="card">暂无记录</div>';
+  }catch(err){
+    box.innerHTML = `<div class="card err">网络异常或接口错误：\n${escapeHTML(String(err))}</div>`;
+  }
 }
 
-/* ====== 删除确认 ====== */
+/* ============ 删除 ============ */
 async function confirmDelete(ticket){
   const phrase = prompt('请再次确认是否删除该条记录？\n输入【确认删除】以继续，或点取消退出。');
   if(phrase===null) return;
   if(phrase.trim()!=='确认删除'){ alert('口令不正确，已取消删除。'); return; }
-  const j = await apiDelete(ticket);
-  if(!j.ok){
-    if(j.error === 'AUTH_REQUIRED' || j.error === 'AUTH_INVALID'){
-      clearToken();
-      alert('登录已过期，请重新登录');
-      document.getElementById('panel').style.display='none';
-      document.getElementById('login').style.display='block';
+
+  const token = getToken();
+  if(!token){ alert('未登录或口令失效，请重新登录。'); logout(); return; }
+
+  try{
+    const j = await apiDelete(ticket, token);
+    if(!j.ok){
+      if(j.error && String(j.error).includes('AUTH')){ alert('口令无效或已过期，请重新登录。'); logout(); return; }
+      alert('删除失败：' + (j.error||''));
       return;
     }
-    alert('删除失败：' + (j.error||''));
-    console.error('delete error:', j);
-    return;
+    loadList();
+  }catch(err){
+    alert('网络异常，删除失败');
   }
-  loadList();
 }
 
-/* ====== 页面初始化：如果已有 token 直接进面板 ====== */
+/* ============ 初始化：有 token 直接进面板 ============ */
 (function init(){
+  // 占位提示（可选）
+  document.getElementById('u').placeholder = `用户名（${PLACEHOLDER_USER}）`;
+  document.getElementById('p').placeholder = `密码（${PLACEHOLDER_PASS}）`;
+
   if(getToken()){
     document.getElementById('panel').style.display='block';
     loadList();
