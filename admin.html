@@ -29,8 +29,8 @@
   <div id="login" class="card" style="display:none">
     <h1>管理员登录</h1>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <input id="u" placeholder="用户名" />
-      <input id="p" type="password" placeholder="密码" />
+      <input id="u" placeholder="用户名（txtadmin）" />
+      <input id="p" type="password" placeholder="密码（202412）" />
       <button class="btn" onclick="login()">登录</button>
     </div>
     <div id="msg" class="muted" style="margin-top:8px"></div>
@@ -50,26 +50,29 @@
 </div>
 
 <script>
-/* ============ 配置 ============ */
-// 替换为你的 Apps Script /exec 地址
+/* ============ 配置（务必改成你“最新部署”的 /exec 链接） ============ */
 const API_URL = 'https://script.google.com/macros/s/AKfycbxtv5e_Sk3vJpMhmAku9UP7tisdnsmN_zG00_8p7OTRqwfJ3ojS5E53AUAoPB3reToG/exec';
-// 可选：固定用户名密码占位提示（真实用户名/密码存在 Apps Script 的 Script Properties 里）
 const PLACEHOLDER_USER = 'txtadmin';
 const PLACEHOLDER_PASS = '202412';
-
-// 存 token 的 key
 const TOKEN_KEY = 'xanadu_admin_token';
 
 /* ============ 小工具 ============ */
-function vstr(x){ return (x===undefined||x===null) ? '' : String(x); }
-function escapeHTML(s){
-  return String(s==null?'':s).replace(/[&<>"']/g, c=>({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[c]));
+const vstr = x => (x==null ? '' : String(x));
+function escapeHTML(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const getToken = () => sessionStorage.getItem(TOKEN_KEY) || '';
+const setToken = t => sessionStorage.setItem(TOKEN_KEY, t||'');
+const clearToken = () => sessionStorage.removeItem(TOKEN_KEY);
+
+/* ============ 健康检查（能最快定位“Failed to fetch”的根因） ============ */
+async function apiPing(){
+  try{
+    const r = await fetch(API_URL + '?pong=1&_=' + Date.now(), { method:'GET', cache:'no-store' });
+    const t = await r.text();
+    try{ return JSON.parse(t); }catch{ return { ok:false, error:'NOT_JSON', raw:t.slice(0,200) }; }
+  }catch(err){
+    return { ok:false, error:'FETCH_ERROR', raw:String(err) };
+  }
 }
-function getToken(){ return sessionStorage.getItem(TOKEN_KEY) || ''; }
-function setToken(t){ sessionStorage.setItem(TOKEN_KEY, t||''); }
-function clearToken(){ sessionStorage.removeItem(TOKEN_KEY); }
 
 /* ============ API 封装 ============ */
 // 认证：POST {action:'auth', user, pass} => {ok:true, token}
@@ -77,7 +80,8 @@ async function apiAuth(user, pass){
   const res = await fetch(API_URL, {
     method:'POST',
     headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // 避免预检
-    body: JSON.stringify({ action:'auth', user, pass })
+    body: JSON.stringify({ action:'auth', user, pass }),
+    cache:'no-store'
   });
   const text = await res.text();
   try{ return JSON.parse(text); }
@@ -87,7 +91,7 @@ async function apiAuth(user, pass){
 // 列表：GET /exec?action=list&auth=TOKEN
 async function apiList(token){
   const url = `${API_URL}?action=list&auth=${encodeURIComponent(token)}&_=${Date.now()}`;
-  const res = await fetch(url, { method:'GET' });
+  const res = await fetch(url, { method:'GET', cache:'no-store' });
   const text = await res.text();
   if(!res.ok) return { ok:false, error:`HTTP ${res.status}`, raw:text.slice(0,800) };
   try{ return JSON.parse(text); }
@@ -99,7 +103,8 @@ async function apiDelete(ticket, token){
   const res = await fetch(API_URL, {
     method:'POST',
     headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action:'delete', ticket, auth:token })
+    body: JSON.stringify({ action:'delete', ticket, auth:token }),
+    cache:'no-store'
   });
   const text = await res.text();
   try{ return JSON.parse(text); }
@@ -149,11 +154,9 @@ async function loadList(){
   try{
     const j = await apiList(token);
     if(!j.ok){
-      // 口令失效时（AUTH_REQUIRED），提示重新登录
-      if(j.error && String(j.error).includes('AUTH')){
+      if(String(j.error||'').includes('AUTH')){
         box.innerHTML = '<div class="card">口令无效或已过期，请重新登录。</div>';
-        logout();
-        return;
+        logout(); return;
       }
       box.innerHTML = `
         <div class="card">
@@ -165,7 +168,7 @@ async function loadList(){
 
     const list = Array.isArray(j.data) ? j.data : [];
 
-    // 疑重：同姓名 +（同微信 或 同邮箱）
+    // 疑重（同名 + 同微信/邮箱）
     const seen = new Map();
     for(const r of list){
       const k1 = `${vstr(r.name).trim()}|${vstr(r.wechat).trim()}`;
@@ -214,7 +217,12 @@ async function loadList(){
 
     box.innerHTML = html || '<div class="card">暂无记录</div>';
   }catch(err){
-    box.innerHTML = `<div class="card err">网络异常或接口错误：\n${escapeHTML(String(err))}</div>`;
+    // 只有真正网络层失败才会进这里（比如 /exec 链接错误、未公开、被跳转拦截）
+    // 顺手做个 ping，给出更明确的提示
+    const ping = await apiPing();
+    const more = ping.ok ? '' : `\n[健康检查] ${ping.error}${ping.raw ? ' - ' + ping.raw : ''}`;
+    document.getElementById('list').innerHTML =
+      `<div class="card err">网络异常或接口错误：\n${escapeHTML(String(err))}${escapeHTML(more)}</div>`;
   }
 }
 
@@ -230,9 +238,8 @@ async function confirmDelete(ticket){
   try{
     const j = await apiDelete(ticket, token);
     if(!j.ok){
-      if(j.error && String(j.error).includes('AUTH')){ alert('口令无效或已过期，请重新登录。'); logout(); return; }
-      alert('删除失败：' + (j.error||''));
-      return;
+      if(String(j.error||'').includes('AUTH')){ alert('口令无效或已过期，请重新登录。'); logout(); return; }
+      alert('删除失败：' + (j.error||'')); return;
     }
     loadList();
   }catch(err){
@@ -240,11 +247,21 @@ async function confirmDelete(ticket){
   }
 }
 
-/* ============ 初始化：有 token 直接进面板 ============ */
-(function init(){
-  // 占位提示（可选）
+/* ============ 初始化 ============ */
+(async function init(){
   document.getElementById('u').placeholder = `用户名（${PLACEHOLDER_USER}）`;
   document.getElementById('p').placeholder = `密码（${PLACEHOLDER_PASS}）`;
+
+  // 先做一次 ping，能提前发现“Failed to fetch”的根因
+  const ping = await apiPing();
+  if(!ping.ok){
+    document.getElementById('login').style.display='block';
+    document.getElementById('msg').innerHTML =
+      '无法访问 Apps Script 接口：<br>' +
+      '<div class="err">' + escapeHTML(ping.error + (ping.raw?(' - '+ping.raw):'')) + '</div>' +
+      '<div class="muted" style="margin-top:6px">请检查：1) API_URL 是否为最新部署的 /exec；2) 部署访问权限是否选 “Anyone”；3) 重新部署后是否复制了新的 URL。</div>';
+    return;
+  }
 
   if(getToken()){
     document.getElementById('panel').style.display='block';
