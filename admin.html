@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>TXT 报课记录管理</title>
+<title>Xanadu 报课记录管理</title>
 <style>
   body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f7f7f7;color:#111}
   .wrap{max-width:1000px;margin:24px auto;padding:0 16px}
@@ -24,12 +24,12 @@
 </head>
 <body>
 <div class="wrap">
-  <!-- 登录卡片 -->
-  <div id="login" class="card">
+  <!-- 口令登录（替代用户名/密码） -->
+  <div id="login" class="card" style="display:none">
     <h1>管理员登录</h1>
+    <div class="muted" style="margin:4px 0 10px">请输入访问口令（仅内部使用）：</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <input id="u" placeholder="用户名" />
-      <input id="p" type="password" placeholder="密码" />
+      <input id="k" type="password" placeholder="访问口令" />
       <button class="btn" onclick="login()">登录</button>
     </div>
     <div id="msg" class="muted" style="margin-top:8px"></div>
@@ -41,6 +41,7 @@
       <h1>报课记录</h1>
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="loadList()">刷新</button>
+        <button class="btn red" onclick="logout()">退出</button>
       </div>
     </div>
     <div id="list"></div>
@@ -48,71 +49,105 @@
 </div>
 
 <script>
-// ====== Apps Script /exec 地址（保持你的现有地址即可） ======
-const API_URL = 'https://script.google.com/macros/s/AKfycbxx1E6Ao9pBv1Ml3uyAe6RTmNfE9b-vcdia0QG6eCKIjnmcvjGAo5wmjbEHdIqLvU4I/exec';
+/* ====== 把此处替换为你的 Apps Script /exec 地址 ====== */
+const API_URL = 'https://script.google.com/macros/s/AKfycbxtv5e_Sk3vJpMhmAku9UP7tisdnsmN_zG00_8p7OTRqwfJ3ojS5E53AUAoPB3reToG/exec';
 
-/* ---------- 小工具：安全转字符串 ---------- */
+/* ========== 口令状态 ========== */
+const KEY_STORAGE = 'xanadu_admin_key';
+
+function getKey(){
+  // 1) URL ?key=xxx 优先；2) sessionStorage；3) 空
+  const u = new URL(location.href);
+  const k = u.searchParams.get('key') || sessionStorage.getItem(KEY_STORAGE) || '';
+  if (k) {
+    // 规范化地址（去掉query里的key，避免泄露在分享链接）
+    if (u.searchParams.get('key')) {
+      sessionStorage.setItem(KEY_STORAGE, k);
+      u.searchParams.delete('key');
+      history.replaceState(null, '', u.toString());
+    }
+    return k;
+  }
+  return '';
+}
+
+function requireKeyOrLoginUI(){
+  const key = getKey();
+  if (key) {
+    document.getElementById('login').style.display='none';
+    document.getElementById('panel').style.display='block';
+    loadList();
+  } else {
+    document.getElementById('panel').style.display='none';
+    document.getElementById('login').style.display='block';
+  }
+}
+
+function login(){
+  const k = document.getElementById('k').value.trim();
+  if(!k){ document.getElementById('msg').textContent='请输入访问口令'; return; }
+  sessionStorage.setItem(KEY_STORAGE, k);
+  document.getElementById('msg').textContent='';
+  requireKeyOrLoginUI();
+}
+
+function logout(){
+  sessionStorage.removeItem(KEY_STORAGE);
+  location.reload();
+}
+
+/* ========== 小工具 ========== */
 function vstr(x){ return (x===undefined || x===null) ? '' : String(x); }
+function escapeHTML(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
 
-/* ---------- API 封装 ---------- */
+/* ========== API 封装（带 key） ========== */
 async function apiList(){
-  const url = `${API_URL}?action=list&_=${Date.now()}`;
+  const key = getKey();
+  const url = `${API_URL}?action=list&key=${encodeURIComponent(key)}&_=${Date.now()}`;
   const res = await fetch(url, { method:'GET' });
   const text = await res.text();
   if(!res.ok){
     return { ok:false, error:`HTTP ${res.status}`, raw:text };
   }
-  try{
-    return JSON.parse(text);
-  }catch(e){
-    return { ok:false, error:'NOT_JSON (接口未返回 JSON，常见是未公开部署或 URL 错误)', raw:text.slice(0,800) };
-  }
+  try{ return JSON.parse(text); }
+  catch(e){ return { ok:false, error:'NOT_JSON（可能是未正确部署或无权访问）', raw:text.slice(0,800) }; }
 }
 
 async function apiDelete(ticket){
+  const key = getKey();
   const res  = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type':'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action:'delete', ticket })
+    body: JSON.stringify({ action:'delete', ticket, key })
   });
   const text = await res.text();
   try{ return JSON.parse(text); }
   catch{ return { ok:false, error:'NOT_JSON', raw:text.slice(0,800) }; }
 }
 
-/* ---------- 登录 ---------- */
-function login(){
-  const u=document.getElementById('u').value.trim();
-  const p=document.getElementById('p').value.trim();
-  if(u==='txtadmin' && p==='202412'){
-    document.getElementById('login').style.display='none';
-    document.getElementById('panel').style.display='block';
-    loadList();
-  }else{
-    document.getElementById('msg').textContent='授权失败';
-  }
-}
-
-/* ---------- 渲染列表 ---------- */
+/* ========== 列表渲染 ========== */
 async function loadList(){
   const box = document.getElementById('list');
   box.innerHTML = '<div class="card">加载中…</div>';
 
   try{
     const j = await apiList();
-
     if(!j.ok){
+      let tip = j.error || '读取失败';
+      if((j.error||'').toUpperCase().includes('AUTH')) tip += '（口令无效或已过期）';
       box.innerHTML = `
         <div class="card">
-          <div><b>读取失败：</b>${escapeHTML(j.error||'')}</div>
+          <div><b>读取失败：</b>${escapeHTML(tip)}</div>
           ${j.raw ? `<div class="err" style="margin-top:8px">${escapeHTML(j.raw)}</div>` : ''}
         </div>`;
-      console.error('list error:', j);
       return;
     }
 
     const list = Array.isArray(j.data)? j.data : [];
-
     // 疑重：同姓名 +（同微信 或 同邮箱）
     const seen = new Map();
     for(const r of list){
@@ -166,22 +201,20 @@ async function loadList(){
     box.innerHTML = html || '<div class="card">暂无记录</div>';
   }catch(err){
     console.error(err);
-    box.innerHTML = `<div class="card err">网络异常或接口错误：\n${escapeHTML(String(err))}</div>`;
+    document.getElementById('list').innerHTML =
+      `<div class="card err">网络异常或接口错误：\n${escapeHTML(String(err))}</div>`;
   }
 }
 
-/* ---------- 删除确认 ---------- */
+/* ========== 删除确认 ========== */
 async function confirmDelete(ticket){
   const phrase = prompt('请再次确认是否删除该条记录？\n输入【确认删除】以继续，或点取消退出。');
   if(phrase===null) return;
   if(phrase.trim()!=='确认删除'){ alert('口令不正确，已取消删除。'); return; }
+
   try{
     const j = await apiDelete(ticket);
-    if(!j.ok){
-      alert('删除失败：' + (j.error||''));
-      console.error('delete error:', j);
-      return;
-    }
+    if(!j.ok){ alert('删除失败：' + (j.error||'')); return; }
     loadList();
   }catch(err){
     console.error(err);
@@ -189,12 +222,8 @@ async function confirmDelete(ticket){
   }
 }
 
-/* ---------- HTML 转义 ---------- */
-function escapeHTML(s){
-  return String(s==null?'':s).replace(/[&<>"']/g, c=>({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[c]));
-}
+/* 初始：根据是否已获取口令来决定显示哪个面板 */
+requireKeyOrLoginUI();
 </script>
 </body>
 </html>
