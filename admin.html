@@ -25,11 +25,11 @@
 <body>
 <div class="wrap">
 
-  <!-- 登录 -->
+  <!-- 登录卡片 -->
   <div id="login" class="card" style="display:none">
     <h1>管理员登录</h1>
-    <div class="muted" id="execShow"></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <div id="execInfo" class="muted" style="margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
       <input id="u" placeholder="用户名" />
       <input id="p" type="password" placeholder="密码" />
       <button class="btn" onclick="login()">登录</button>
@@ -37,7 +37,7 @@
     <div id="msg" class="muted" style="margin-top:8px"></div>
   </div>
 
-  <!-- 列表 -->
+  <!-- 列表面板 -->
   <div id="panel" style="display:none">
     <div class="card header">
       <h1>报课记录</h1>
@@ -51,11 +51,38 @@
 </div>
 
 <script>
-/* ====== 修改这里：你的 Apps Script /exec URL ====== */
+/* ============ 配置：把这个地址换成你的 exec URL ============ */
 const EXEC_URL = 'https://script.google.com/macros/s/AKfycbwlaDdcxmpQpGmNyt8MnVEMeubht8jwGIHdyyOQSL9soJWgmqbM-Z7Wj_9fly7Ezxb8/exec';
-
-/* ====== 小工具 ====== */
 const TOKEN_KEY = 'xanadu_admin_token';
+
+/* ============ JSONP 工具（避免 CORS） ============ */
+function jsonp(url, params={}, timeout=120000){
+  return new Promise((resolve,reject)=>{
+    const cb = 'cb_' + Math.random().toString(36).slice(2);
+    params.jsonp = cb;
+    const qs = Object.entries(params).map(([k,v])=>`${encodeURIComponent(k)}=${encodeURIComponent(v==null?'':String(v))}`).join('&');
+    const src = url + (url.includes('?')?'&':'?') + qs;
+
+    const s = document.createElement('script');
+    let timer = setTimeout(()=>{
+      cleanup();
+      reject(new Error('JSONP timeout'));
+    }, timeout);
+
+    function cleanup(){
+      if (s.parentNode) s.parentNode.removeChild(s);
+      try{ delete window[cb]; }catch(e){ window[cb]=undefined; }
+      clearTimeout(timer);
+    }
+
+    window[cb] = (data)=>{ cleanup(); resolve(data); };
+    s.onerror = ()=>{ cleanup(); reject(new Error('JSONP load error')); };
+    s.src = src;
+    document.body.appendChild(s);
+  });
+}
+
+/* ============ 小工具 ============ */
 function vstr(x){ return (x===undefined||x===null) ? '' : String(x); }
 function escapeHTML(s){
   return String(s==null?'':s).replace(/[&<>"']/g, c=>({
@@ -63,52 +90,30 @@ function escapeHTML(s){
   }[c]));
 }
 function getToken(){ return sessionStorage.getItem(TOKEN_KEY) || ''; }
-function setToken(t){ sessionStorage.setItem(TOKEN_KEY, (t||'').trim()); }
+function setToken(t){ sessionStorage.setItem(TOKEN_KEY, t||''); }
 function clearToken(){ sessionStorage.removeItem(TOKEN_KEY); }
 
-/* ====== JSONP 封装 ====== */
-function jsonp(url, params={}){
-  return new Promise((resolve,reject)=>{
-    const cb = 'cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
-    const qs = new URLSearchParams({...params, jsonp:cb}).toString();
-    const full = url + (url.includes('?')?'&':'?') + qs;
-    const s = document.createElement('script');
-    const timer = setTimeout(()=>{
-      cleanup();
-      reject(new Error('JSONP timeout'));
-    }, 15000);
-    function cleanup(){
-      clearTimeout(timer);
-      delete window[cb];
-      s.remove();
-    }
-    window[cb] = (data)=>{ cleanup(); resolve(data); };
-    s.onerror = ()=>{ cleanup(); reject(new Error('JSONP network error')); };
-    s.src = full;
-    document.body.appendChild(s);
-  });
-}
-
-/* ====== API ====== */
+/* ============ API (JSONP) ============ */
 function apiAuth(user, pass){
   return jsonp(EXEC_URL, { action:'auth', user, pass });
 }
 function apiList(token){
-  return jsonp(EXEC_URL, { action:'list', auth:(token||'').trim() });
+  return jsonp(EXEC_URL, { action:'list', auth: token, _: Date.now() });
 }
 function apiDelete(ticket, token){
-  return jsonp(EXEC_URL, { action:'delete', ticket, auth:(token||'').trim() });
+  // 删除用 POST 也行，但我们就统一用 JSONP GET 版本做一个“软删除”演示：
+  return jsonp(EXEC_URL, { action:'delete', ticket, auth: token, _: Date.now() });
 }
 
-/* ====== 登录 / 退出 ====== */
+/* ============ 登录 / 退出 ============ */
 async function login(){
   const u = document.getElementById('u').value.trim();
   const p = document.getElementById('p').value.trim();
   document.getElementById('msg').textContent = '登录中…';
   try{
     const j = await apiAuth(u, p);
-    if(!j.ok){
-      document.getElementById('msg').textContent = '授权失败：' + (j.error||'');
+    if(!j || !j.ok){
+      document.getElementById('msg').textContent = '授权失败：' + (j && j.error || 'unknown');
       return;
     }
     setToken(j.token || '');
@@ -119,6 +124,7 @@ async function login(){
     document.getElementById('msg').textContent = '网络异常：' + String(err);
   }
 }
+
 function logout(){
   clearToken();
   document.getElementById('panel').style.display='none';
@@ -126,30 +132,31 @@ function logout(){
   document.getElementById('msg').textContent = '';
 }
 
-/* ====== 列表渲染 ====== */
+/* ============ 列表渲染 ============ */
 async function loadList(){
   const token = getToken();
   const box = document.getElementById('list');
   box.innerHTML = '<div class="card">加载中…</div>';
 
   if(!token){
-    box.innerHTML = '<div class="card">未登录或口令失效，请重新登录。</div>';
+    box.innerHTML = '<div class="card">口令无效或已过期，请点击右上角【退出】后重新登录。</div>';
+    logout();
     return;
   }
 
   try{
     const j = await apiList(token);
-    if(!j.ok){
-      if(String(j.error||'').includes('AUTH')){
-        box.innerHTML = '<div class="card">口令无效或已过期，请点右上角【退出】后重新登录。</div>';
-        return; // 不立刻 logout，方便你看到提示
+    if(!j || !j.ok){
+      if(j && String(j.error).includes('AUTH')) {
+        box.innerHTML = '<div class="card">口令无效或已过期，请点击右上角【退出】后重新登录。</div>';
+        logout();
+        return;
       }
-      box.innerHTML = `<div class="card"><b>读取失败：</b>${escapeHTML(j.error||'')}</div>`;
+      box.innerHTML = `<div class="card">读取失败：${escapeHTML(j && j.error || 'unknown')}</div>`;
       return;
     }
 
     const list = Array.isArray(j.data) ? j.data : [];
-
     // 疑重：同姓名 +（同微信 或 同邮箱）
     const seen = new Map();
     for(const r of list){
@@ -159,7 +166,6 @@ async function loadList(){
       seen.set(k2,(seen.get(k2)||0)+1);
     }
 
-    // 时间倒序
     const sorted = list.slice().sort((a,b)=>{
       const ta = new Date(vstr(a.ts)).getTime()||0;
       const tb = new Date(vstr(b.ts)).getTime()||0;
@@ -199,35 +205,43 @@ async function loadList(){
 
     box.innerHTML = html || '<div class="card">暂无记录</div>';
   }catch(err){
-    box.innerHTML = `<div class="card err">网络异常或接口错误：\n${escapeHTML(String(err))}</div>`;
+    box.innerHTML = `<div class="card err">网络异常：\n${escapeHTML(String(err))}</div>`;
   }
 }
 
-/* ====== 删除 ====== */
+/* ============ 删除 ============ */
 async function confirmDelete(ticket){
   const phrase = prompt('请再次确认是否删除该条记录？\n输入【确认删除】以继续，或点取消退出。');
   if(phrase===null) return;
   if(phrase.trim()!=='确认删除'){ alert('口令不正确，已取消删除。'); return; }
 
   const token = getToken();
-  if(!token){ alert('未登录或口令失效，请重新登录。'); return; }
+  if(!token){ alert('未登录或口令失效，请重新登录。'); logout(); return; }
 
   try{
     const j = await apiDelete(ticket, token);
-    if(!j.ok){
-      if(String(j.error||'').includes('AUTH')){ alert('口令无效或已过期，请重新登录。'); return; }
-      alert('删除失败：' + (j.error||''));
+    if(!j || !j.ok){
+      if(j && String(j.error).includes('AUTH')){ alert('口令无效或已过期，请重新登录。'); logout(); return; }
+      alert('删除失败：' + (j && j.error || 'unknown'));
       return;
     }
     loadList();
   }catch(err){
-    alert('网络异常，删除失败');
+    alert('网络异常，删除失败：' + String(err));
   }
 }
 
-/* ====== 初始化 ====== */
-(function init(){
-  document.getElementById('execShow').textContent = '接口：' + EXEC_URL;
+/* ============ 初始化 ============ */
+(async function init(){
+  document.getElementById('execInfo').textContent = '接口：' + EXEC_URL;
+  try{
+    // 简单自检：pong
+    const pong = await jsonp(EXEC_URL, {action:'pong', _:Date.now()});
+    if(!pong || !pong.ok){ throw new Error('pong failed'); }
+  }catch(e){
+    document.getElementById('execInfo').textContent = '接口：获取失败：' + e.message;
+  }
+
   if(getToken()){
     document.getElementById('panel').style.display='block';
     loadList();
