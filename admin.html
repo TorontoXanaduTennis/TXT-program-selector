@@ -12,7 +12,6 @@
   input{padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px}
   .btn{padding:10px 14px;border:none;border-radius:10px;background:#0f766e;color:#fff;cursor:pointer}
   .btn.red{background:#dc2626}
-  .btn.gray{background:#6b7280}
   .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
   table{width:100%;border-collapse:collapse}
   th,td{border:1px solid #e5e7eb;padding:8px;text-align:left;vertical-align:top}
@@ -20,21 +19,18 @@
   .muted{color:#6b7280}
   .rowhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
   .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#fee2e2;color:#991b1b;font-size:12px;margin-left:8px}
-  .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap}
+  .err{white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace}
 </style>
 </head>
 <body>
 <div class="wrap">
-
-  <!-- 登录卡片 -->
-  <div id="login" class="card" style="display:none">
+  <div id="login" class="card">
     <h1>管理员登录</h1>
-    <div class="muted" style="margin-bottom:8px">接口：<span id="apiHint">正在自动获取…</span></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div class="muted" id="apiHint">接口：<span id="apiUrl"></span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
       <input id="u" placeholder="用户名" />
       <input id="p" type="password" placeholder="密码" />
       <button class="btn" onclick="login()">登录</button>
-      <button class="btn gray" onclick="forceDiscover()">重试接口</button>
     </div>
     <div id="msg" class="muted" style="margin-top:8px"></div>
   </div>
@@ -45,259 +41,172 @@
       <h1>报课记录</h1>
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="loadList()">刷新</button>
-        <button class="btn gray" onclick="openDiag()">诊断</button>
         <button class="btn red" onclick="logout()">退出</button>
       </div>
     </div>
     <div id="list"></div>
   </div>
-
-  <!-- 诊断 -->
-  <div id="diag" class="card" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <b>网络诊断</b>
-      <button class="btn gray" onclick="closeDiag()">关闭</button>
-    </div>
-    <div id="diagBox" class="mono" style="margin-top:8px;font-size:13px"></div>
-  </div>
 </div>
 
 <script>
-/* ========= 需要你替换的唯一一项：当前部署的 script.google.com ... /exec ========= */
-const EXEC_URL = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLjTW9zv7DdPkgQFPWc6E3YLoNFDbR5FJoh-osn8Fw_bpzKdKj7FL5hNZRnbsqDeP81_4aJI_QfuePq7rjbthDvb1sqaX6nAxYtAB_l7_leHZDT4fpggkEB_kJApvhDYCvyOsgXBsfaLCEeGqe7I5eDOsvb-g_99oQ6FQdX-64IxCjXJixc2ylR9tQ-7Vd3fRmR1KYQRPjHC4CdzopzcMLp1igvGWj6joffeJ3g9esv03rTlUwyStYjGe2c678CL9DKSljh_NUTkUH7K9Pvqf3DOjcJH0lw36c385trc3Q4pC1akbpk&lib=MYRhpJzSQwW76hmLS9jV-zQrvHWfkxrme/exec';
+/* ==== 配置：把这个换成“script.google.com/.../exec” 的 Web App URL ==== */
+const EXEC_URL = 'https://script.google.com/macros/s/AKfycbxeSuKL4RrxJDFr78P9h52O5EHab7HqVntxkjrZ2y4apMgTzEMgsavYhZ7IHzWl5JhB/exec'; // ←替换
 
-/* ========= 常量 ========= */
-const LS_TOKEN = 'xanadu_admin_token';
-const LS_API   = 'xanadu_api_base'; // 例如 https://script.googleusercontent.com/macros/echo?user_content_key=.../exec（去掉 ?action 部分）
-const PLACEHOLDER_USER = 'txtadmin';
-const PLACEHOLDER_PASS = '202412';
+/* ==== 工具 ==== */
+const TOKEN_KEY='xanadu_admin_token';
+function vstr(x){ return (x===undefined||x===null) ? '' : String(x); }
+function escapeHTML(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+function getToken(){ return sessionStorage.getItem(TOKEN_KEY) || ''; }
+function setToken(t){ sessionStorage.setItem(TOKEN_KEY, t||''); }
+function clearToken(){ sessionStorage.removeItem(TOKEN_KEY); }
 
-/* ========= 小工具 ========= */
-const $ = sel => document.querySelector(sel);
-const vstr = x => (x==null?'':String(x));
-const esc  = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
-function setToken(t){ sessionStorage.setItem(LS_TOKEN, t||''); }
-function getToken(){ return sessionStorage.getItem(LS_TOKEN) || ''; }
-function clearToken(){ sessionStorage.removeItem(LS_TOKEN); }
-function setApiBase(u){ localStorage.setItem(LS_API, u||''); }
-function getApiBase(){ return localStorage.getItem(LS_API) || ''; }
-function apiBaseOk(u){ return /^https:\/\/script\.googleusercontent\.com\/macros/i.test(u); }
-
-/* ========= 关键：自动发现 googleusercontent 最终接口 =========
- * 利用 <img> 加载 EXEC_URL?action=pong，浏览器会 302 跳转。
- * 在 onerror/onload 的事件里，img.currentSrc 会是最终 URL（即 googleusercontent）。
- * 然后把 “直到 /exec” 的前缀存为 API_BASE。
- */
-function discoverApiBase(){
+/* ==== JSONP 调用器 ==== */
+function jsonp(params){
   return new Promise((resolve,reject)=>{
-    const img = new Image();
-    img.referrerPolicy = 'no-referrer';
-    // 失败或成功都会拿到 currentSrc（JSON 不是图片，通常走 onerror）
-    const done = () => {
-      try{
-        const finalUrl = img.currentSrc || '';
-        // 从最终 URL 中截出 “.../exec” 的前缀
-        const m = finalUrl.match(/^https:\/\/script\.googleusercontent\.com\/macros\/.+?\/exec/i);
-        if(m){
-          setApiBase(m[0]);
-          $('#apiHint').textContent = m[0];
-          resolve(m[0]);
-        }else{
-          reject(new Error('未能解析最终URL：' + finalUrl));
-        }
-      }catch(e){ reject(e); }
+    const cb='cb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const url = EXEC_URL + '?' + new URLSearchParams({ ...params, jsonp:cb, _ : Date.now() });
+    const s = document.createElement('script');
+    let done = false;
+    window[cb] = (data)=>{
+      if(done) return;
+      done = true;
+      cleanup();
+      resolve(data);
     };
-    img.onload  = done;
-    img.onerror = done;
-    img.src = EXEC_URL + (EXEC_URL.includes('?')?'&':'?') + 'action=pong&_=' + Date.now();
+    s.onerror = ()=>{
+      if(done) return;
+      done = true;
+      cleanup();
+      reject(new Error('JSONP_LOAD_ERROR'));
+    };
+    function cleanup(){
+      delete window[cb];
+      s.remove();
+    }
+    s.src = url;
+    document.body.appendChild(s);
   });
 }
 
-async function ensureApiBase(){
-  let base = getApiBase();
-  if(apiBaseOk(base)){ $('#apiHint').textContent = base; return base; }
-  $('#apiHint').textContent = '正在自动获取…';
-  base = await discoverApiBase();
-  return base;
+/* ==== API 封装（全部走 JSONP） ==== */
+function apiAuth(user, pass){
+  return jsonp({ action:'auth', user, pass });
 }
-function forceDiscover(){
-  setApiBase('');
-  ensureApiBase().catch(e=>{
-    $('#apiHint').textContent = '获取失败：' + e.message;
-  });
+function apiList(token){
+  return jsonp({ action:'list', auth: token });
+}
+function apiDelete(ticket, token){
+  return jsonp({ action:'delete', ticket, auth: token });
 }
 
-/* ========= API 封装 ========= */
-function buildURL(action, params={}){
-  const base = getApiBase();
-  const url  = new URL(base);
-  url.searchParams.set('action', action);
-  Object.entries(params).forEach(([k,v])=>url.searchParams.set(k, v));
-  url.searchParams.set('_', Date.now());
-  return url.toString();
-}
-
-async function apiAuth(user, pass){
-  await ensureApiBase();
-  const res = await fetch(buildURL('auth'), {
-    method:'POST',
-    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action:'auth', user, pass })
-  });
-  const txt = await res.text();
-  try{ return JSON.parse(txt); }catch{ return {ok:false, error:'NOT_JSON', raw:txt}; }
-}
-
-async function apiList(token){
-  await ensureApiBase();
-  const res = await fetch(buildURL('list', {auth: token}), { method:'GET' });
-  const txt = await res.text();
-  try{ return JSON.parse(txt); }catch{ return {ok:false, error:'NOT_JSON', raw:txt}; }
-}
-
-async function apiDelete(ticket, token){
-  await ensureApiBase();
-  const res = await fetch(buildURL('delete'), {
-    method:'POST',
-    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action:'delete', ticket, auth: token })
-  });
-  const txt = await res.text();
-  try{ return JSON.parse(txt); }catch{ return {ok:false, error:'NOT_JSON', raw:txt}; }
-}
-
-/* ========= 登录/退出 ========= */
+/* ==== 登录 / 退出 ==== */
 async function login(){
-  const u = $('#u').value.trim();
-  const p = $('#p').value.trim();
-  $('#msg').textContent = '登录中…';
+  const u = document.getElementById('u').value.trim();
+  const p = document.getElementById('p').value.trim();
+  const msg = document.getElementById('msg');
+  msg.textContent = '登录中…';
   try{
-    const j = await apiAuth(u,p);
-    if(!j.ok){ $('#msg').textContent = '授权失败：' + (j.error||''); return; }
+    const j = await apiAuth(u, p);
+    if(!j.ok){ msg.textContent='授权失败：' + (j.error||''); return; }
     setToken(j.token||'');
-    $('#login').style.display='none';
-    $('#panel').style.display='block';
+    document.getElementById('login').style.display='none';
+    document.getElementById('panel').style.display='block';
     loadList();
-  }catch(e){
-    $('#msg').textContent = '网络异常：' + e.message;
+  }catch(err){
+    msg.textContent='网络异常：' + String(err);
   }
 }
 function logout(){
   clearToken();
-  $('#panel').style.display='none';
-  $('#login').style.display='block';
-  $('#msg').textContent = '';
+  document.getElementById('panel').style.display='none';
+  document.getElementById('login').style.display='block';
+  document.getElementById('msg').textContent='';
 }
 
-/* ========= 列表/渲染 ========= */
+/* ==== 列表渲染 ==== */
 async function loadList(){
-  const tok = getToken();
-  const box = $('#list');
-  box.innerHTML = '<div class="card">加载中…</div>';
-  if(!tok){ box.innerHTML='<div class="card">未登录或口令失效，请重新登录。</div>'; logout(); return; }
+  const token = getToken();
+  const box = document.getElementById('list');
+  box.innerHTML='<div class="card">加载中…</div>';
+  if(!token){ box.innerHTML='<div class="card">未登录或口令失效，请重新登录。</div>'; logout(); return; }
   try{
-    const j = await apiList(tok);
+    const j = await apiList(token);
     if(!j.ok){
       if(String(j.error||'').includes('AUTH')){ box.innerHTML='<div class="card">口令无效或已过期，请重新登录。</div>'; logout(); return; }
-      showDiag('LIST 请求错误', j);
-      box.innerHTML = `<div class="card">读取失败：${esc(j.error||'')}。</div>`;
+      box.innerHTML = `<div class="card"><b>读取失败：</b>${escapeHTML(j.error||'')}</div>`;
       return;
     }
     const list = Array.isArray(j.data)? j.data : [];
-    // 疑重标记
     const seen = new Map();
-    list.forEach(r=>{
+    for(const r of list){
       const k1 = `${vstr(r.name).trim()}|${vstr(r.wechat).trim()}`;
       const k2 = `${vstr(r.name).trim()}|${vstr(r.email).trim()}`;
       seen.set(k1,(seen.get(k1)||0)+1);
       seen.set(k2,(seen.get(k2)||0)+1);
-    });
-    // 时间倒序
-    const rows = list.slice().sort((a,b)=>{
+    }
+    const sorted = list.slice().sort((a,b)=>{
       const ta = new Date(vstr(a.ts)).getTime()||0;
       const tb = new Date(vstr(b.ts)).getTime()||0;
       return tb - ta;
-    }).map(r=>{
-      const name=vstr(r.name).trim(), we=vstr(r.wechat).trim(), em=vstr(r.email).trim();
-      const suspected = (seen.get(`${name}|${we}`)>1) || (seen.get(`${name}|${em}`)>1);
+    });
+    const html = sorted.map(r=>{
+      const name=vstr(r.name).trim(), wechat=vstr(r.wechat).trim(), email=vstr(r.email).trim();
+      const phone=vstr(r.phone).trim(), best=vstr(r.best), notes=vstr(r.notes), detail=vstr(r.detail);
+      const ticket=vstr(r.ticket); const suspected=(seen.get(`${name}|${wechat}`)>1)||(seen.get(`${name}|${email}`)>1);
       const ts = r.ts ? new Date(vstr(r.ts)).toLocaleString() : '';
       return `
-        <div class="card">
-          <div class="rowhead">
-            <div><b>咨询号码：</b>${esc(vstr(r.ticket))}${suspected?'<span class="badge">疑重</span>':''}</div>
-            <button class="btn red" onclick="confirmDelete('${esc(vstr(r.ticket))}')">删除</button>
-          </div>
-          <table>
-            <tr><th>客户姓名</th><td>${esc(name)}</td></tr>
-            <tr><th>微信号</th><td>${esc(we || 'n/a')}</td></tr>
-            <tr><th>邮箱</th><td>${esc(em)}</td></tr>
-            <tr><th>电话</th><td>${esc(vstr(r.phone))}</td></tr>
-            <tr><th>最佳匹配推荐</th><td>${esc(vstr(r.best))}</td></tr>
-            <tr><th>备注</th><td>${esc(vstr(r.notes))}</td></tr>
-            <tr><th>报课详细选项</th><td>${esc(vstr(r.detail))}</td></tr>
-            <tr><th>时间</th><td class="muted">${esc(ts)}</td></tr>
-          </table>
-        </div>`;
+      <div class="card">
+        <div class="rowhead">
+          <div><b>咨询号码：</b>${escapeHTML(ticket)}${suspected?'<span class="badge">疑重</span>':''}</div>
+          <button class="btn red" onclick="confirmDelete('${escapeHTML(ticket)}')">删除</button>
+        </div>
+        <table>
+          <tr><th>客户姓名</th><td>${escapeHTML(name)}</td></tr>
+          <tr><th>微信号</th><td>${escapeHTML(wechat || 'n/a')}</td></tr>
+          <tr><th>邮箱</th><td>${escapeHTML(email)}</td></tr>
+          <tr><th>电话</th><td>${escapeHTML(phone)}</td></tr>
+          <tr><th>最佳匹配推荐</th><td>${escapeHTML(best)}</td></tr>
+          <tr><th>备注</th><td>${escapeHTML(notes)}</td></tr>
+          <tr><th>报课详细选项</th><td>${escapeHTML(detail)}</td></tr>
+          <tr><th>时间</th><td class="muted">${escapeHTML(ts)}</td></tr>
+        </table>
+      </div>`;
     }).join('');
-    box.innerHTML = rows || '<div class="card">暂无记录</div>';
-  }catch(e){
-    showDiag('LIST 网络异常', {error:String(e)});
-    box.innerHTML = `<div class="card">网络异常或接口错误：${esc(e.message)}</div>`;
+    box.innerHTML = html || '<div class="card">暂无记录</div>';
+  }catch(err){
+    box.innerHTML=`<div class="card err">网络异常或接口错误：\n${escapeHTML(String(err))}</div>`;
   }
 }
 
-/* ========= 删除 ========= */
+/* ==== 删除 ==== */
 async function confirmDelete(ticket){
   const phrase = prompt('请再次确认是否删除该条记录？\n输入【确认删除】以继续，或点取消退出。');
   if(phrase===null) return;
   if(phrase.trim()!=='确认删除'){ alert('口令不正确，已取消删除。'); return; }
-  const tok = getToken();
-  if(!tok){ alert('未登录或口令失效，请重新登录。'); logout(); return; }
+  const token = getToken();
+  if(!token){ alert('未登录或口令失效，请重新登录。'); logout(); return; }
   try{
-    const j = await apiDelete(ticket, tok);
+    const j = await apiDelete(ticket, token);
     if(!j.ok){
       if(String(j.error||'').includes('AUTH')){ alert('口令无效或已过期，请重新登录。'); logout(); return; }
-      showDiag('DELETE 错误', j);
-      alert('删除失败：' + (j.error||''));
-      return;
+      alert('删除失败：' + (j.error||'')); return;
     }
     loadList();
-  }catch(e){
-    showDiag('DELETE 网络异常', {error:String(e)});
+  }catch(err){
     alert('网络异常，删除失败');
   }
 }
 
-/* ========= 诊断 ========= */
-function showDiag(title, obj){
-  const base = getApiBase();
-  const tok  = getToken();
-  const urlList = buildURL('list', {auth: tok || '[未登录]'});
-  $('#diagBox').textContent =
-`# ${title}
-API_BASE: ${base||'[未就绪]'}
-Request: GET ${urlList}
----- Result ----
-${JSON.stringify(obj,null,2).slice(0,4000)}
-`;
-  openDiag();
+/* ==== 初始化 ==== */
+document.getElementById('apiUrl').textContent = EXEC_URL;
+if(getToken()){
+  document.getElementById('panel').style.display='block';
+  loadList();
 }
-function openDiag(){ $('#diag').style.display='block'; }
-function closeDiag(){ $('#diag').style.display='none'; }
-
-/* ========= 初始化 ========= */
-(async function init(){
-  $('#u').placeholder = `用户名（${PLACEHOLDER_USER}）`;
-  $('#p').placeholder = `密码（${PLACEHOLDER_PASS}）`;
-
-  try{ await ensureApiBase(); }catch(e){ $('#apiHint').textContent = '获取失败：' + e.message; }
-  if(getToken()){
-    $('#panel').style.display='block';
-    loadList();
-  }else{
-    $('#login').style.display='block';
-  }
-})();
 </script>
 </body>
 </html>
