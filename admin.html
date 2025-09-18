@@ -57,26 +57,30 @@
 
 <script>
 /* ============ 配置 ============ */
-// Apps Script /exec 地址（保持为你当前可用的）
+// Apps Script /exec 地址
 const API_URL = 'https://script.google.com/macros/s/AKfycbxOclBFWj36vr0WHTnc3i5dqoMWlCuDf6Fn9g2DkE67lhmALphvFXOJonYjP5znHUYA/exec';
-// 你的 Google OAuth Web Client ID（与 Apps Script 中保持一致）
+// 你的 Google OAuth Web Client ID
 const GOOGLE_CLIENT_ID = '126117723960-3gdibqblicp6ncc0jiuv9pu8frgmhs5n.apps.googleusercontent.com';
 // 会话存储 key
 const SESSION_KEY = 'txt_admin_session';
+const EMAIL_KEY   = 'txt_admin_email';
 
 /* ============ 小工具 ============ */
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) }
 function getSession(){ return sessionStorage.getItem(SESSION_KEY) || ''; }
 function setSession(v){ sessionStorage.setItem(SESSION_KEY, v||''); }
-function clearSession(){ sessionStorage.removeItem(SESSION_KEY); }
-function isISODate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(s); }
-function isHM(s){ return /^([01]\d|2[0-3]):[0-5]\d$/.test(s); }
+function getEmail(){ return sessionStorage.getItem(EMAIL_KEY) || ''; }
+function setEmail(v){ sessionStorage.setItem(EMAIL_KEY, v||''); }
+function clearSession(){ sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(EMAIL_KEY); }
+function pad2(n){ return n<10 ? '0'+n : ''+n; }
+function nowLocalDate(){ const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function nowLocalTime(){ const d=new Date(); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
 
 /* ============ API ============ */
 async function apiSignin(id_token){
   const res = await fetch(API_URL, {
     method:'POST',
-    headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // 避免预检
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
     body: JSON.stringify({ action:'signin', id_token })
   });
   const text = await res.text();
@@ -142,7 +146,9 @@ async function onGoogleCredential(resp){
       document.getElementById('msg').textContent = '授权失败：' + (j.error||'');
       return;
     }
+    // 存 session + email
     setSession(j.session);
+    setEmail(j.email || '');
     document.getElementById('login').style.display='none';
     document.getElementById('panel').style.display='block';
     loadList();
@@ -263,25 +269,21 @@ async function confirmDelete(ticket){
   }
 }
 
-// 待跟进 -> 录入三项 -> 提交
+/* 待跟进 -> 自动填充【当前登录邮箱 + 当前日期/时间】-> 二次确认口令【确认已跟进】 */
 async function followUp(ticket){
-  const by = prompt('请输入跟进人员：');
-  if(by===null) return;
-  if(!by.trim()){ alert('跟进人员为必填'); return; }
-
-  const date = prompt('请输入跟进日期（YYYY-MM-DD）：');
-  if(date===null) return;
-  if(!isISODate(date.trim())){ alert('日期格式应为 YYYY-MM-DD'); return; }
-
-  const time = prompt('请输入跟进时间（HH:MM 24小时制）：');
-  if(time===null) return;
-  if(!isHM(time.trim())){ alert('时间格式应为 HH:MM（24小时制）'); return; }
-
   const session = getSession();
+  const email = getEmail();
   if(!session){ alert('未登录或口令失效，请重新登录。'); logout(); return; }
+  if(!email){ alert('未获取到当前登录邮箱，请重新登录后再试。'); logout(); return; }
+
+  const okPhrase = prompt(
+    `请再次确认是否已对该客户进行跟进？\n跟进人员：${email}\n跟进日期：${nowLocalDate()}\n跟进时间：${nowLocalTime()}\n\n输入【确认已跟进】以继续，或点取消退出。`
+  );
+  if(okPhrase===null) return;
+  if(okPhrase.trim()!=='确认已跟进'){ alert('口令不正确，已取消操作。'); return; }
 
   try{
-    const j = await apiFollow(session, ticket, by.trim(), date.trim(), time.trim());
+    const j = await apiFollow(session, ticket, email, nowLocalDate(), nowLocalTime());
     if(!j.ok){
       if(String(j.error||'').includes('AUTH')){ alert('口令无效或已过期，请重新登录。'); logout(); return; }
       alert('提交失败：' + (j.error||'')); return;
