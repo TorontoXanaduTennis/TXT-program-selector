@@ -11,15 +11,20 @@
   h1{margin:0 0 10px}
   .btn{padding:10px 14px;border:none;border-radius:10px;background:#0f766e;color:#fff;cursor:pointer}
   .btn.red{background:#dc2626}
+  .btn.warn{background:#fb923c;color:#111} /* 淡橙色按钮：待跟进 */
+  .btn[disabled]{opacity:.6;cursor:not-allowed}
   .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
   table{width:100%;border-collapse:collapse}
   th,td{border:1px solid #e5e7eb;padding:8px;text-align:left;vertical-align:top}
   th{background:#f3f4f6}
   .muted{color:#6b7280}
-  .rowhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .rowhead{display:flex;gap:8px;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap}
   .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#fee2e2;color:#991b1b;font-size:12px;margin-left:8px}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px}
+  .pill.green{background:#dcfce7;color:#065f46;border:1px solid #bbf7d0}
   .err{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
   .google{margin-top:8px}
+  .rowactions{display:flex;gap:8px;align-items:center}
 </style>
 </head>
 <body>
@@ -52,10 +57,10 @@
 
 <script>
 /* ============ 配置 ============ */
-// Apps Script /exec 地址
-const API_URL = 'https://script.google.com/macros/s/AKfycbxVzCJAmutgQMpVuWcTaf4egwMzDTkb1ybiwwfivukDfKVOuHjvLDtQB7qohlnggFUw/exec'; // ← 替换成你的
-// 你的 Google OAuth Web Client ID（要和 Apps Script 里的常量一致）
-const GOOGLE_CLIENT_ID = '126117723960-3gdibqblicp6ncc0jiuv9pu8frgmhs5n.apps.googleusercontent.com'; // ← 替换成你的
+// Apps Script /exec 地址（保持为你当前可用的）
+const API_URL = 'https://script.google.com/macros/s/AKfycbxVzCJAmutgQMpVuWcTaf4egwMzDTkb1ybiwwfivukDfKVOuHjvLDtQB7qohlnggFUw/exec';
+// 你的 Google OAuth Web Client ID（与 Apps Script 中保持一致）
+const GOOGLE_CLIENT_ID = '126117723960-3gdibqblicp6ncc0jiuv9pu8frgmhs5n.apps.googleusercontent.com';
 // 会话存储 key
 const SESSION_KEY = 'txt_admin_session';
 
@@ -64,6 +69,8 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;'
 function getSession(){ return sessionStorage.getItem(SESSION_KEY) || ''; }
 function setSession(v){ sessionStorage.setItem(SESSION_KEY, v||''); }
 function clearSession(){ sessionStorage.removeItem(SESSION_KEY); }
+function isISODate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(s); }
+function isHM(s){ return /^([01]\d|2[0-3]):[0-5]\d$/.test(s); }
 
 /* ============ API ============ */
 async function apiSignin(id_token){
@@ -89,6 +96,15 @@ async function apiDelete(session, ticket){
     method:'POST',
     headers:{ 'Content-Type':'text/plain;charset=utf-8' },
     body: JSON.stringify({ action:'delete', session, ticket })
+  });
+  const text = await res.text();
+  try{ return JSON.parse(text); }catch{ return { ok:false, error:'NOT_JSON', raw:text }; }
+}
+async function apiFollow(session, ticket, by, date, time){
+  const res = await fetch(API_URL, {
+    method:'POST',
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action:'follow', session, ticket, by, date, time })
   });
   const text = await res.text();
   try{ return JSON.parse(text); }catch{ return { ok:false, error:'NOT_JSON', raw:text }; }
@@ -142,7 +158,7 @@ function logout(){
   document.getElementById('msg').textContent = '';
 }
 
-/* ============ 列表 / 删除 ============ */
+/* ============ 列表 / 删除 / 跟进 ============ */
 async function loadList(){
   const session = getSession();
   const box = document.getElementById('list');
@@ -184,11 +200,24 @@ async function loadList(){
       const ticket=esc(r.ticket||'');
       const suspected = (seen.get(`${(r.name||'').trim()}|${(r.wechat||'').trim()}`)>1) || (seen.get(`${(r.name||'').trim()}|${(r.email||'').trim()}`)>1);
       const ts = r.ts ? new Date(r.ts).toLocaleString() : '';
+
+      // 跟进状态
+      const fby   = esc(r.follow_by || '');
+      const fdate = esc(r.follow_date || '');
+      const ftime = esc(r.follow_time || '');
+      const followed = !!(r.follow_by && r.follow_date && r.follow_time);
+
+      // 行内操作：待跟进按钮 / 已跟进标识 / 删除按钮（已跟进隐藏删除）
+      const actions = followed
+        ? `<span class="pill green">✅ 已跟进 · ${fby} · ${fdate} ${ftime}</span>`
+        : `<button class="btn warn" onclick="followUp('${ticket}')">待跟进</button>
+           <button class="btn red" onclick="confirmDelete('${ticket}')">删除</button>`;
+
       return `
         <div class="card">
           <div class="rowhead">
             <div><b>咨询号码：</b>${ticket}${suspected?'<span class="badge">疑重</span>':''}</div>
-            <button class="btn red" onclick="confirmDelete('${ticket}')">删除</button>
+            <div class="rowactions">${actions}</div>
           </div>
           <table>
             <tr><th>客户姓名</th><td>${name}</td></tr>
@@ -199,6 +228,11 @@ async function loadList(){
             <tr><th>备注</th><td>${notes}</td></tr>
             <tr><th>报课详细选项</th><td>${detail}</td></tr>
             <tr><th>时间</th><td class="muted">${esc(ts)}</td></tr>
+            ${ followed ? `
+              <tr><th>跟进人员</th><td>${fby}</td></tr>
+              <tr><th>跟进日期</th><td>${fdate}</td></tr>
+              <tr><th>跟进时间</th><td>${ftime}</td></tr>
+            ` : '' }
           </table>
         </div>`;
     }).join('');
@@ -226,6 +260,35 @@ async function confirmDelete(ticket){
     loadList();
   }catch(err){
     alert('网络异常，删除失败');
+  }
+}
+
+// 待跟进 -> 录入三项 -> 提交
+async function followUp(ticket){
+  const by = prompt('请输入跟进人员：');
+  if(by===null) return;
+  if(!by.trim()){ alert('跟进人员为必填'); return; }
+
+  const date = prompt('请输入跟进日期（YYYY-MM-DD）：');
+  if(date===null) return;
+  if(!isISODate(date.trim())){ alert('日期格式应为 YYYY-MM-DD'); return; }
+
+  const time = prompt('请输入跟进时间（HH:MM 24小时制）：');
+  if(time===null) return;
+  if(!isHM(time.trim())){ alert('时间格式应为 HH:MM（24小时制）'); return; }
+
+  const session = getSession();
+  if(!session){ alert('未登录或口令失效，请重新登录。'); logout(); return; }
+
+  try{
+    const j = await apiFollow(session, ticket, by.trim(), date.trim(), time.trim());
+    if(!j.ok){
+      if(String(j.error||'').includes('AUTH')){ alert('口令无效或已过期，请重新登录。'); logout(); return; }
+      alert('提交失败：' + (j.error||'')); return;
+    }
+    loadList();
+  }catch(err){
+    alert('网络异常，请稍后再试');
   }
 }
 </script>
