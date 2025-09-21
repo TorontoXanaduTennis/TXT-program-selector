@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>内部用 · Google Calendar 日历（GitHub Pages 纯前端）</title>
+  <title>内部用 · Google Calendar（含只读日历展示）</title>
 
   <!-- FullCalendar v6 -->
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.min.css" rel="stylesheet">
@@ -26,8 +26,15 @@
     .chip{display:inline-block;padding:2px 8px;border:1px solid var(--border);border-radius:999px;background:#fff;font-size:12px;color:#374151}
     .title{font-weight:600;margin-right:6px}
     select{padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:#fff}
-    label.switch{display:flex;align-items:center;gap:6px}
-    .diag{max-width:1100px;margin:8px auto 0;padding:8px 12px;border:1px dashed var(--border);background:#fff; border-radius:10px; color:#374151}
+    .panel{max-width:1100px;margin:10px auto 0;padding:8px 12px;border:1px solid var(--border);background:#fff;border-radius:10px}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+    .pill{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;padding:2px 8px;background:#fff;font-size:12px}
+    .sw{width:10px;height:10px;border-radius:3px;border:1px solid #00000022}
+    .list{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+    .item{display:flex;align-items:center;gap:6px;font-size:12px;border:1px dashed var(--border);padding:3px 8px;border-radius:8px;background:#fff}
+    .item input{transform:translateY(1px)}
+    .diag{max-width:1100px;margin:8px auto 0;padding:8px 12px;border:1px dashed var(--border);background:#fff;border-radius:10px;color:#374151}
     .diag b{color:#111}
     .diag pre{white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:12px;color:#6b7280}
   </style>
@@ -40,13 +47,21 @@
       <button id="signin">使用 Google 登录</button>
       <button id="signout" style="display:none;">退出</button>
       <span id="status" class="help">未登录</span>
-      <select id="calId" title="选择写入日历（默认 primary）" style="display:none;"></select>
-      <label id="mergeWrap" class="switch help" style="display:none;">
-        <input type="checkbox" id="mergeAll" />
-        合并显示全部
-      </label>
+      <select id="writeCal" title="写入目标（只列可写）" style="display:none;"></select>
     </div>
   </header>
+
+  <!-- 选择显示哪些日历（包含只读） -->
+  <div id="picker" class="panel" style="display:none;">
+    <div class="row">
+      <div class="help">选择要在页面上显示的日历（可多选；只读也可显示）：</div>
+      <button id="checkAll" class="help" style="border:1px solid var(--border);background:#fff;border-radius:8px;">全选</button>
+      <button id="uncheckAll" class="help" style="border:1px solid var(--border);background:#fff;border-radius:8px;">全不选</button>
+      <div class="help">写入目标：<code id="currCal">primary</code></div>
+    </div>
+    <div id="calList" class="list"></div>
+    <div class="legend" id="legend"></div>
+  </div>
 
   <div id="calendar"></div>
 
@@ -56,40 +71,37 @@
   </div>
 
   <div class="footer">
-    <div>时区：<code id="tzLabel">America/Toronto</code>　当前写入日历：<code id="currCal">primary</code></div>
-    <p class="help">提示：需要在 Google Cloud 的 OAuth 客户端把本地/线上域名加入 Authorized JavaScript origins；共享日历须给你的账号“可更改事件”权限才能写入。合并显示开启时，会同时拉取你可见的所有日历（包括只读订阅日历），仅用于查看。</p>
+    <div>时区：<code id="tzLabel">America/Toronto</code></div>
+    <p class="help">说明：只读日历会显示，但不可编辑；写入始终落在右上角“写入目标”所选日历。若你对某本日历没有“可更改事件”权限，尝试拖动/删除会被阻止并提示。</p>
   </div>
 
   <script>
-    // ======= 替换为你的 Google Web Client ID（Web 应用） =======
+    // 1) 替换为你的 Google Web Client ID（Web 应用）
     const CLIENT_ID = "126117723960-3gdibqblicp6ncc0jiuv9pu8frgmhs5n.apps.googleusercontent.com";
 
-    // 读取日历列表（含只读）+ 写事件（最小必要组合）
+    // 2) Scope：读取所有可见日历 + 写事件（最小必要组合）
     const SCOPES = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
 
-    const DEFAULT_CALENDAR_ID = "primary";
     const TIMEZONE = "America/Toronto";
 
     let tokenClient, accessToken = null, gapiReady = false, gisReady = false, calendar;
-    let calendarListCache = []; // 你可见的所有日历（含只读）
+    let calendarListCache = []; // 所有“可见”的日历（含只读）
+    let showCalendarIds = new Set(); // 当前“勾选用于显示”的日历ID集合（含只读）
+    let writeCalendarId = "primary"; // 写入目标（只列可写）
 
-    // —— 小工具：诊断输出 ——
+    // —— 工具：诊断输出 ——
     function showDiag(obj) {
       const box = document.getElementById('diag');
       const pre = document.getElementById('diagText');
       box.style.display = '';
-      try {
-        pre.textContent = (typeof obj === 'string') ? obj : JSON.stringify(obj, null, 2);
-      } catch(e) {
-        pre.textContent = String(obj);
-      }
+      try { pre.textContent = (typeof obj === 'string') ? obj : JSON.stringify(obj, null, 2); }
+      catch(e) { pre.textContent = String(obj); }
     }
 
+    // —— GAPI/GIS 初始化 ——
     function gapiLoaded() {
       gapi.load('client', async () => {
-        await gapi.client.init({
-          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
-        });
+        await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"] });
         gapiReady = true;
       });
     }
@@ -102,11 +114,10 @@
         callback: (resp) => {
           if (resp && resp.access_token) {
             accessToken = resp.access_token;
-            // **关键：把 token 灌进 gapi**
-            gapi.client.setToken({ access_token: accessToken });
+            gapi.client.setToken({ access_token: accessToken }); // 关键：把 token 灌进 gapi
             onSignedIn();
           } else {
-            showDiag({oauth_callback_resp: resp});
+            showDiag({ oauth_callback_resp: resp });
           }
         },
       });
@@ -118,7 +129,6 @@
       if (!gapiReady || !gisReady) return;
       tokenClient.requestAccessToken({ prompt: 'consent' });
     }
-
     function signOut() {
       if (!accessToken) return;
       google.accounts.oauth2.revoke(accessToken, () => {
@@ -127,63 +137,104 @@
         document.getElementById('signin').style.display = '';
         document.getElementById('signout').style.display = 'none';
         document.getElementById('status').textContent = '未登录';
-        document.getElementById('calId').style.display = 'none';
-        document.getElementById('mergeWrap').style.display = 'none';
-        document.getElementById('currCal').textContent = 'primary';
+        document.getElementById('writeCal').style.display = 'none';
+        document.getElementById('picker').style.display = 'none';
         if (calendar) calendar.destroy();
       });
     }
-
     document.getElementById('signin').onclick = signIn;
     document.getElementById('signout').onclick = signOut;
     document.getElementById('tzLabel').textContent = TIMEZONE;
 
-    // —— 登录后：拉日历列表 ——
+    // —— 登录后：拉日历列表，构建“写入目标 + 多选显示清单” ——
     async function onSignedIn() {
       document.getElementById('signin').style.display = 'none';
       document.getElementById('signout').style.display = '';
       document.getElementById('status').textContent = '已登录';
 
-      const sel = document.getElementById('calId');
-      const mergeWrap = document.getElementById('mergeWrap');
-      const mergeAll = document.getElementById('mergeAll');
-
-      sel.innerHTML = '';
       try {
         const res = await gapi.client.calendar.calendarList.list({ maxResults: 250 });
         calendarListCache = (res.result.items || []);
 
+        // 写入目标：只列可写（owner/writer）
+        const writeSel = document.getElementById('writeCal');
+        writeSel.innerHTML = '';
         const writable = calendarListCache.filter(c => c.accessRole === 'owner' || c.accessRole === 'writer');
         for (const cal of writable) {
           const opt = document.createElement('option');
           opt.value = cal.id;
           opt.textContent = cal.summary + (cal.primary ? " (primary)" : "");
-          sel.appendChild(opt);
+          writeSel.appendChild(opt);
         }
         const primary = writable.find(c => c.primary);
-        sel.value = primary ? primary.id : (writable[0]?.id || 'primary');
-        sel.style.display = '';
-        mergeWrap.style.display = '';
+        writeCalendarId = primary ? primary.id : (writable[0]?.id || 'primary');
+        writeSel.value = writeCalendarId;
+        document.getElementById('currCal').textContent = writeCalendarId;
+        writeSel.style.display = '';
+
+        writeSel.onchange = () => {
+          writeCalendarId = writeSel.value;
+          document.getElementById('currCal').textContent = writeCalendarId;
+        };
+
+        // “显示哪些日历”：列出所有可见（含只读），默认全选
+        const picker = document.getElementById('picker');
+        const listDiv = document.getElementById('calList');
+        const legend = document.getElementById('legend');
+        listDiv.innerHTML = '';
+        legend.innerHTML = '';
+        showCalendarIds = new Set(calendarListCache.map(c => c.id)); // 默认全选
+        for (const cal of calendarListCache) {
+          // 勾选项
+          const wrap = document.createElement('label');
+          wrap.className = 'item';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = true;
+          cb.value = cal.id;
+          cb.onchange = () => {
+            if (cb.checked) showCalendarIds.add(cal.id);
+            else showCalendarIds.delete(cal.id);
+            if (calendar) calendar.refetchEvents();
+          };
+          const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = cal.backgroundColor || '#bbb';
+          const txt = document.createElement('span'); txt.textContent = cal.summary + (cal.accessRole === 'reader' ? '（只读）' : '');
+          wrap.appendChild(cb); wrap.appendChild(sw); wrap.appendChild(txt);
+          listDiv.appendChild(wrap);
+
+          // 图例
+          const pill = document.createElement('span');
+          pill.className = 'pill';
+          const sw2 = document.createElement('span'); sw2.className = 'sw'; sw2.style.background = cal.backgroundColor || '#bbb';
+          const name = document.createElement('span'); name.textContent = cal.summary;
+          pill.appendChild(sw2); pill.appendChild(name);
+          legend.appendChild(pill);
+        }
+        picker.style.display = '';
+
+        // 全选/全不选
+        document.getElementById('checkAll').onclick = () => {
+          showCalendarIds = new Set(calendarListCache.map(c => c.id));
+          listDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+          if (calendar) calendar.refetchEvents();
+        };
+        document.getElementById('uncheckAll').onclick = () => {
+          showCalendarIds = new Set();
+          listDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+          if (calendar) calendar.refetchEvents();
+        };
 
       } catch (e) {
         showDiag(e);
-        const opt = document.createElement('option');
-        opt.value = 'primary'; opt.textContent = 'Primary';
-        sel.appendChild(opt);
-        sel.style.display = '';
-        mergeWrap.style.display = 'none';
       }
 
-      sel.onchange = () => { if (calendar) { calendar.destroy(); renderCalendar(sel.value); } };
-      mergeAll.onchange = () => { if (calendar) { calendar.refetchEvents(); } };
-
-      renderCalendar(sel.value || DEFAULT_CALENDAR_ID);
+      renderCalendar();
     }
 
     // —— 渲染日历 ——
-    function renderCalendar(calendarId) {
-      document.getElementById('currCal').textContent = calendarId;
+    function renderCalendar() {
       const el = document.getElementById('calendar');
+      if (calendar) calendar.destroy();
 
       calendar = new FullCalendar.Calendar(el, {
         initialView: 'timeGridWeek',
@@ -195,12 +246,14 @@
         slotMaxTime: "23:00:00",
         headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' },
 
-        // —— 拉事件：强制使用 RFC3339 日期时间（避免 400） + 合并模式 ——
+        // 拉取被“勾选用于显示”的全部日历（含只读）
         events: async (info, success, failure) => {
           try {
-            const useMerge = document.getElementById('mergeAll')?.checked;
             const timeMin = new Date(info.start).toISOString();
             const timeMax = new Date(info.end).toISOString();
+
+            // 如果一个都没选，为了避免空白，至少显示“写入目标”
+            const ids = (showCalendarIds.size ? Array.from(showCalendarIds) : [writeCalendarId]);
 
             const fetchOne = async (cid) => {
               const res = await gapi.client.calendar.events.list({
@@ -213,6 +266,8 @@
               });
               const meta = calendarListCache.find(x => x.id === cid);
               const color = meta?.backgroundColor;
+              const canEdit = meta && (meta.accessRole === 'owner' || meta.accessRole === 'writer');
+
               return (res.result.items || []).map(ev => ({
                 id: (ev.id || Math.random().toString(36).slice(2)) + "::" + cid,
                 title: ev.summary || '(无标题)',
@@ -221,27 +276,30 @@
                 allDay: !!ev.start.date,
                 backgroundColor: color,
                 borderColor: color,
-                extendedProps: { gcal: true, calendarId: cid, originalId: ev.id }
+                // 标记是否可编辑（只读则禁拖拽/删除）
+                extendedProps: { calendarId: cid, originalId: ev.id, canEdit }
               }));
             };
 
-            let merged = [];
-            if (useMerge) {
-              const allIds = calendarListCache.map(c => c.id);
-              const chunks = await Promise.all(allIds.map(cid => fetchOne(cid)));
-              merged = chunks.flat();
-            } else {
-              merged = await fetchOne(calendarId);
-            }
-
-            success(merged);
+            const chunks = await Promise.all(ids.map(cid => fetchOne(cid)));
+            success(chunks.flat());
           } catch (err) {
             showDiag(err);
             failure(err);
           }
         },
 
-        // —— 新建事件：写到当前选中的那本文历 ——
+        // 只允许编辑“可编辑的事件”
+        eventAllow: function(dropInfo, draggedEvent) {
+          const canEdit = draggedEvent.extendedProps?.canEdit;
+          if (!canEdit) {
+            alert('这是只读日历的事件，不能编辑。');
+            return false;
+          }
+          return true;
+        },
+
+        // 新建事件：始终写到“写入目标”
         select: async (selInfo) => {
           const title = prompt('事件标题：', '新事件');
           if (!title) { calendar.unselect(); return; }
@@ -252,33 +310,35 @@
             end:   isAllDay ? { date: selInfo.endStr }   : { dateTime: selInfo.endStr,   timeZone: TIMEZONE },
           };
           try {
-            const res = await gapi.client.calendar.events.insert({ calendarId, resource });
+            const res = await gapi.client.calendar.events.insert({ calendarId: writeCalendarId, resource });
             const ev = res.result;
-            const meta = calendarListCache.find(x => x.id === calendarId);
+            const meta = calendarListCache.find(x => x.id === writeCalendarId);
             const color = meta?.backgroundColor;
-            calendar.addEvent({
-              id: (ev.id || Math.random().toString(36).slice(2)) + "::" + calendarId,
-              title: ev.summary || '(无标题)',
-              start: ev.start.dateTime || ev.start.date,
-              end: ev.end?.dateTime || ev.end?.date,
-              allDay: !!ev.start.date,
-              backgroundColor: color,
-              borderColor: color,
-              extendedProps: { gcal: true, calendarId, originalId: ev.id }
-            });
+            // 仅当写入目标被勾选用于显示时，才即时添加到视图（否则等下次切换/勾选时才会显示）
+            if (showCalendarIds.has(writeCalendarId)) {
+              calendar.addEvent({
+                id: (ev.id || Math.random().toString(36).slice(2)) + "::" + writeCalendarId,
+                title: ev.summary || '(无标题)',
+                start: ev.start.dateTime || ev.start.date,
+                end: ev.end?.dateTime || ev.end?.date,
+                allDay: !!ev.start.date,
+                backgroundColor: color,
+                borderColor: color,
+                extendedProps: { calendarId: writeCalendarId, originalId: ev.id, canEdit: true }
+              });
+            }
           } catch (e) {
             showDiag(e);
             alert('创建失败：' + (e.result?.error?.message || e.message));
           }
         },
 
-        // —— 修改事件：定位正确的日历与事件 ID ——
+        // 修改事件（只有可编辑事件能走到这里）
         eventChange: async (chg) => {
           const e = chg.event;
           const [origId, cid] = (e.id || "").split("::");
-          const targetCalId = cid || calendarId;
+          const targetCalId = cid;
           const targetEventId = origId || e.id;
-
           try {
             await gapi.client.calendar.events.update({
               calendarId: targetCalId,
@@ -296,13 +356,14 @@
           }
         },
 
-        // —— 删除事件 ——
+        // 点击删除（只读事件在 eventAllow 已经被拦下）
         eventClick: async (clickInfo) => {
+          const canEdit = clickInfo.event.extendedProps?.canEdit;
+          if (!canEdit) { alert('这是只读日历的事件，不能删除。'); return; }
           if (!confirm('删除这个事件？')) return;
           const [origId, cid] = (clickInfo.event.id || "").split("::");
-          const targetCalId = cid || calendarId;
+          const targetCalId = cid;
           const targetEventId = origId || clickInfo.event.id;
-
           try {
             await gapi.client.calendar.events.delete({ calendarId: targetCalId, eventId: targetEventId });
             clickInfo.event.remove();
