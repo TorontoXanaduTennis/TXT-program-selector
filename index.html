@@ -55,12 +55,18 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwQQtA16FUvR8tSbHQb76ao
 async function apiCreate(record){
   const res = await fetch(API_URL, {
     method: 'POST',
-    // 关键：用 text/plain 避免 CORS 预检（Apps Script 不需要自定义响应头）
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action: 'create', data: record })
   });
-  return res.json();
+  const text = await res.text();
+  console.log('[create] raw response:', text); // ★ 关键日志
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error('NOT_JSON:' + text.slice(0, 500));
+  }
 }
+
 
 
 /* ========= 文案 ========= */
@@ -218,15 +224,28 @@ async function submitLead(){
 
   try{
     const j = await apiCreate(payload);
-    if(!j.ok){ alert(S.lang==='zh'?'提交失败，请稍后再试':'Submit failed, please try again.'); return; }
+    // ★ 在页面上显式提示：是否命中 create、是否发信
+    if(!j.ok){
+      alert((S.lang==='zh'?'提交失败：':'Submit failed: ') + (j.error || ''));
+      console.error('create response (not ok):', j);
+      return;
+    }
+    console.info('create response (ok):', j);
+
+    // 给你看的调试信息（可以先保留几次验证）
+    if (typeof j.mailSent !== 'undefined' || j.rid) {
+      alert(`提交成功\n票号: ${j.ticket}\nmailSent: ${j.mailSent}\nrid: ${j.rid || '-'}`);
+    }
+
     S.lastTicket = j.ticket;
     S.submitted  = true;
     render();
   }catch(err){
-    console.error(err);
-    alert(S.lang==='zh' ? '网络异常，请稍后再试' : 'Network error, please try again later.');
+    console.error('create error:', err);
+    alert((S.lang==='zh' ? '网络异常/响应错误：' : 'Network/parse error: ') + String(err));
   }
 }
+
 
 /* ========= 选项按钮 ========= */
 function opt(label,call){
