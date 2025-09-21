@@ -4,6 +4,264 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Google Calendar 内部日历（GitHub Pages 示例）</title>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>内部用 · Google Calendar 日历（GitHub Pages 纯前端）</title>
+
+  <!-- FullCalendar v6 -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.global.min.js"></script>
+
+  <!-- Google Identity Services + Google API JS -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js"></script>
+
+  <style>
+    :root { --border:#e5e7eb; --bg:#f8fafc; --text:#111827; --muted:#6b7280; }
+    * { box-sizing: border-box; }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);color:var(--text)}
+    header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;padding:10px 14px;z-index:10}
+    #calendar{max-width:1100px;margin:16px auto;padding:0 12px}
+    button{padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer}
+    .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+    .help{font-size:12px;color:var(--muted)}
+    .footer{max-width:1100px;margin:16px auto;padding:0 12px 24px;color:var(--muted);font-size:12px}
+    .chip{display:inline-block;padding:2px 8px;border:1px solid var(--border);border-radius:999px;background:#fff;font-size:12px;color:#374151}
+    .title{font-weight:600;margin-right:6px}
+    select{padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:#fff}
+  </style>
+</head>
+<body>
+  <header>
+    <span class="title">内部日历</span>
+    <span class="chip">纯前端 · GitHub Pages</span>
+    <div class="right">
+      <button id="signin">使用 Google 登录</button>
+      <button id="signout" style="display:none;">退出</button>
+      <span id="status" class="help">未登录</span>
+      <select id="calId" title="选择日历（默认 primary）" style="display:none;"></select>
+    </div>
+  </header>
+
+  <div id="calendar"></div>
+
+  <div class="footer">
+    <div>时区：<code id="tzLabel">America/Toronto</code>　当前日历：<code id="currCal">primary</code></div>
+    <p class="help">提示：需要在 Google Cloud 的 OAuth 客户端把本地/线上域名加入 Authorized JavaScript origins；共享日历须给你的账号“可更改事件”权限才能写入。</p>
+  </div>
+
+  <script>
+    // ======= 1) 替换为你的 Google Web Client ID =======
+    // 形如：1234567890-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
+    const CLIENT_ID = "126117723960-3gdibqblicp6ncc0jiuv9pu8frgmhs5n.apps.googleusercontent.com";
+
+    // ======= 2) Scope：读取日历列表 + 写事件（最小必要组合）=======
+    const SCOPES = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
+
+    // 默认主日历；也可改为具体 calendarId（如 xxxx@group.calendar.google.com）
+    const DEFAULT_CALENDAR_ID = "primary";
+
+    // 你的时区
+    const TIMEZONE = "America/Toronto";
+
+    // ======= GIS / GAPI 初始化 =======
+    let tokenClient, accessToken = null, gapiReady = false, gisReady = false, calendar;
+
+    function gapiLoaded() {
+      gapi.load('client', async () => {
+        await gapi.client.init({
+          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
+        });
+        gapiReady = true;
+      });
+    }
+    window.gapiLoaded = gapiLoaded;
+
+    function gisLoaded() {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (resp) => {
+          if (resp && resp.access_token) {
+            accessToken = resp.access_token;
+            onSignedIn();
+          }
+        },
+      });
+      gisReady = true;
+    }
+    window.gisLoaded = gisLoaded;
+
+    // ======= 登录 / 退出 =======
+    async function signIn() {
+      if (!gapiReady || !gisReady) return;
+      tokenClient.requestAccessToken({ prompt: 'consent' }); // 首次弹窗；后续可改为 silent
+    }
+
+    function signOut() {
+      if (!accessToken) return;
+      google.accounts.oauth2.revoke(accessToken, () => {
+        accessToken = null;
+        document.getElementById('signin').style.display = '';
+        document.getElementById('signout').style.display = 'none';
+        document.getElementById('status').textContent = '未登录';
+        document.getElementById('calId').style.display = 'none';
+        document.getElementById('currCal').textContent = 'primary';
+        if (calendar) calendar.destroy();
+      });
+    }
+
+    document.getElementById('signin').onclick = signIn;
+    document.getElementById('signout').onclick = signOut;
+    document.getElementById('tzLabel').textContent = TIMEZONE;
+
+    // ======= 登录后：列出“可写”日历并渲染 =======
+    async function onSignedIn() {
+      document.getElementById('signin').style.display = 'none';
+      document.getElementById('signout').style.display = '';
+      document.getElementById('status').textContent = '已登录';
+
+      const sel = document.getElementById('calId');
+      sel.innerHTML = '';
+      try {
+        const res = await gapi.client.calendar.calendarList.list({ maxResults: 250 });
+        // 只显示你有写权限的日历，避免选中不能写的（想看全部可去掉这个 filter）
+        const writable = (res.result.items || []).filter(cal =>
+          cal.accessRole === 'owner' || cal.accessRole === 'writer'
+        );
+
+        for (const cal of writable) {
+          const opt = document.createElement('option');
+          opt.value = cal.id;
+          opt.textContent = cal.summary + (cal.primary ? " (primary)" : "");
+          sel.appendChild(opt);
+        }
+        const primary = writable.find(c => c.primary);
+        sel.value = primary ? primary.id : (writable[0]?.id || 'primary');
+        sel.style.display = '';
+
+      } catch (e) {
+        const opt = document.createElement('option');
+        opt.value = 'primary'; opt.textContent = 'Primary';
+        sel.appendChild(opt); sel.style.display = '';
+      }
+
+      sel.onchange = () => { if (calendar) { calendar.destroy(); renderCalendar(sel.value); } };
+      renderCalendar(sel.value || DEFAULT_CALENDAR_ID);
+    }
+
+    // ======= FullCalendar 渲染 & 同步 =======
+    function renderCalendar(calendarId) {
+      document.getElementById('currCal').textContent = calendarId;
+      const el = document.getElementById('calendar');
+
+      calendar = new FullCalendar.Calendar(el, {
+        initialView: 'timeGridWeek',
+        timeZone: TIMEZONE,
+        selectable: true,
+        editable: true,
+        nowIndicator: true,
+        slotMinTime: "07:00:00",
+        slotMaxTime: "23:00:00",
+        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' },
+
+        // 读取当前视图时间窗内的事件
+        events: async (info, success, failure) => {
+          try {
+            const res = await gapi.client.calendar.events.list({
+              calendarId,
+              timeMin: info.startStr,
+              timeMax: info.endStr,
+              singleEvents: true,
+              orderBy: 'startTime',
+              showDeleted: false,
+              maxResults: 2500,
+            });
+            const items = (res.result.items || []).map(ev => ({
+              id: ev.id,
+              title: ev.summary || '(无标题)',
+              start: ev.start.dateTime || ev.start.date,
+              end: ev.end?.dateTime || ev.end?.date,
+              allDay: !!ev.start.date,
+              extendedProps: { gcal: true }
+            }));
+            success(items);
+          } catch (err) {
+            failure(err);
+          }
+        },
+
+        // 拖选创建事件 → 调用 insert
+        select: async (selInfo) => {
+          const title = prompt('事件标题：', '新事件');
+          if (!title) { calendar.unselect(); return; }
+          const isAllDay = selInfo.allDay;
+          const resource = {
+            summary: title,
+            start: isAllDay ? { date: selInfo.startStr } : { dateTime: selInfo.startStr, timeZone: TIMEZONE },
+            end:   isAllDay ? { date: selInfo.endStr }   : { dateTime: selInfo.endStr,   timeZone: TIMEZONE },
+          };
+          try {
+            const res = await gapi.client.calendar.events.insert({ calendarId, resource });
+            const ev = res.result;
+            calendar.addEvent({
+              id: ev.id,
+              title: ev.summary || '(无标题)',
+              start: ev.start.dateTime || ev.start.date,
+              end: ev.end?.dateTime || ev.end?.date,
+              allDay: !!ev.start.date,
+              extendedProps: { gcal: true }
+            });
+          } catch (e) {
+            alert('创建失败：' + (e.result?.error?.message || e.message));
+          }
+        },
+
+        // 拖拽/拉伸修改 → 调用 update
+        eventChange: async (chg) => {
+          const e = chg.event;
+          try {
+            await gapi.client.calendar.events.update({
+              calendarId,
+              eventId: e.id,
+              resource: {
+                summary: e.title,
+                start: e.allDay ? { date: e.startStr } : { dateTime: e.start.toISOString(), timeZone: TIMEZONE },
+                end:   e.allDay ? { date: e.endStr   } : { dateTime: e.end?.toISOString(),  timeZone: TIMEZONE },
+              }
+            });
+          } catch (err) {
+            alert('更新失败，已回滚：' + (err.result?.error?.message || err.message));
+            chg.revert();
+          }
+        },
+
+        // 点击删除 → 调用 delete
+        eventClick: async (clickInfo) => {
+          if (!confirm('删除这个事件？')) return;
+          try {
+            await gapi.client.calendar.events.delete({ calendarId, eventId: clickInfo.event.id });
+            clickInfo.event.remove();
+          } catch (err) {
+            alert('删除失败：' + (err.result?.error?.message || err.message));
+          }
+        }
+      });
+
+      calendar.render();
+    }
+
+    // 初始化回调
+    window.onload = () => {
+      if (window.gapi) gapiLoaded();
+      if (window.google) gisLoaded();
+    };
+  </script>
+</body>
+</html>
 
   <!-- FullCalendar v6 -->
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.min.css" rel="stylesheet">
