@@ -50,7 +50,7 @@
   </div>
 
 <script>
-/* ========= 后端 API（把 URL 换成你的 /exec） ========= */
+/* ========= 后端 API ========= */
 const API_URL = 'https://script.google.com/macros/s/AKfycbyR61yeZgHnp2TMX0IMozi4Ql8r2G7_l9yLR7LHfsYFu9asqvs0KXLeasgX40mEaZtn/exec';
 async function apiCreate(record){
   const res = await fetch(API_URL, {
@@ -59,15 +59,11 @@ async function apiCreate(record){
     body: JSON.stringify({ action: 'create', data: record })
   });
   const text = await res.text();
-  console.log('[create] raw response:', text); // ★ 关键日志
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    throw new Error('NOT_JSON:' + text.slice(0, 500));
-  }
+  // 可保留日志便于排查；稳定后也可删掉
+  // console.log('[create] raw response:', text);
+  try { return JSON.parse(text); }
+  catch { throw new Error('NOT_JSON:' + text.slice(0,500)); }
 }
-
-
 
 /* ========= 文案 ========= */
 const STR={
@@ -76,7 +72,7 @@ const STR={
 };
 const t=k=>STR[S.lang||'zh'][k];
 
-/* ========= 价目（成人删95折；儿童长期补3pw） ========= */
+/* ========= 价目 ========= */
 const PRICE={
   adult_zero:[["1v1 10hr","$800/人","试课$100"],["1v1 20hr","$1550/人",""],["1v2 10hr","$1000/共","试课$140"],["1v2 20hr","$1900/共",""],["1v3 15hr","$1500/共","试课$240"],["1v4 15hr","$1800/共","试课$280"]],
   adult_basic:[["1v1 10hr","$900/人","试课$110"],["1v1 20hr","$1710/人",""],["1v2 10hr","$1250/共","试课$150"],["1v2 20hr","$2375/共",""],["1v3 15hr","$1500/共","试课$240"],["1v4 15hr","$1800/共","试课$280"]],
@@ -192,6 +188,7 @@ function contactBlock(){
       <button class="btn alt" onclick="submitLead()">${t('submit')}</button>
     </div>`;
 }
+
 async function submitLead(){
   const name = document.getElementById('c_name').value.trim();
   const phone = document.getElementById('c_phone').value.trim();
@@ -224,19 +221,11 @@ async function submitLead(){
 
   try{
     const j = await apiCreate(payload);
-    // ★ 在页面上显式提示：是否命中 create、是否发信
     if(!j.ok){
-      alert((S.lang==='zh'?'提交失败：':'Submit failed: ') + (j.error || ''));
-      console.error('create response (not ok):', j);
+      alert(S.lang==='zh'?'提交失败，请稍后再试':'Submit failed, please try again.');
       return;
     }
-    console.info('create response (ok):', j);
-
-    // 给你看的调试信息（可以先保留几次验证）
-    if (typeof j.mailSent !== 'undefined' || j.rid) {
-      alert(`提交成功\n票号: ${j.ticket}\nmailSent: ${j.mailSent}\nrid: ${j.rid || '-'}`);
-    }
-
+    // 不再 alert，直接进入成功页
     S.lastTicket = j.ticket;
     S.submitted  = true;
     render();
@@ -245,7 +234,6 @@ async function submitLead(){
     alert((S.lang==='zh' ? '网络异常/响应错误：' : 'Network/parse error: ') + String(err));
   }
 }
-
 
 /* ========= 选项按钮 ========= */
 function opt(label,call){
