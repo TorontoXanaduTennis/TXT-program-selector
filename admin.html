@@ -57,16 +57,18 @@
 
 <script>
 /* ============ 配置 ============ */
-// Apps Script /exec 地址
 const API_URL = 'https://script.google.com/macros/s/AKfycbwQQtA16FUvR8tSbHQb76aontIMxUBdqnEUaCAbKidmvoUAbwOJJu_QtCkQPavxn5w_/exec';
-// 你的 Google OAuth Web Client ID
 const GOOGLE_CLIENT_ID = '126117723960-3gdibqblicp6ncc0jiuv9pu8frgmhs5n.apps.googleusercontent.com';
-// 会话存储 key
 const SESSION_KEY = 'txt_admin_session';
 const EMAIL_KEY   = 'txt_admin_email';
 
 /* ============ 小工具 ============ */
-function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) }
+const T = (v) => {              // 安全字符串化，避免 .trim 报错
+  if (v == null) return '';
+  if (Array.isArray(v)) return v.map(x => x == null ? '' : String(x)).join(', ').trim();
+  try { return String(v).trim(); } catch { return ''; }
+};
+function esc(s){ return T(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) }
 function getSession(){ return sessionStorage.getItem(SESSION_KEY) || ''; }
 function setSession(v){ sessionStorage.setItem(SESSION_KEY, v||''); }
 function getEmail(){ return sessionStorage.getItem(EMAIL_KEY) || ''; }
@@ -116,7 +118,6 @@ async function apiFollow(session, ticket, by, date, time){
 
 /* ============ 登录 ============ */
 window.onload = function(){
-  // 渲染 Google 登录按钮
   window.google?.accounts.id.initialize({
     client_id: GOOGLE_CLIENT_ID,
     callback: onGoogleCredential,
@@ -127,7 +128,6 @@ window.onload = function(){
     { theme: 'outline', size: 'large', text: 'signin_with' }
   );
 
-  // 如果已存在会话，尝试直接进入
   if(getSession()){
     document.getElementById('panel').style.display='block';
     loadList();
@@ -146,7 +146,6 @@ async function onGoogleCredential(resp){
       document.getElementById('msg').textContent = '授权失败：' + (j.error||'');
       return;
     }
-    // 存 session + email
     setSession(j.session);
     setEmail(j.email || '');
     document.getElementById('login').style.display='none';
@@ -176,6 +175,8 @@ async function loadList(){
 
   try{
     const j = await apiList(session);
+
+    // 先判断 ok，再渲染
     if(!j.ok){
       if(String(j.error||'').includes('AUTH')){
         box.innerHTML = '<div class="card">口令无效或已过期，请重新登录。</div>';
@@ -185,35 +186,42 @@ async function loadList(){
       return;
     }
 
-    const list = Array.isArray(j.data)? j.data : [];
-    // 疑重标记
+    const list = Array.isArray(j.data) ? j.data : [];
+
+    // 疑重标记：用 T() 规避非字符串
     const seen = new Map();
     for(const r of list){
-      const name=(r.name||'').trim(), wc=(r.wechat||'').trim(), em=(r.email||'').trim();
-      seen.set(`${name}|${wc}`,(seen.get(`${name}|${wc}`)||0)+1);
-      seen.set(`${name}|${em}`,(seen.get(`${name}|${em}`)||0)+1);
+      const key1 = `${T(r.name)}|${T(r.wechat)}`;
+      const key2 = `${T(r.name)}|${T(r.email)}`;
+      seen.set(key1,(seen.get(key1)||0)+1);
+      seen.set(key2,(seen.get(key2)||0)+1);
     }
 
     const sorted = list.slice().sort((a,b)=>{
-      const ta = new Date(a.ts||0).getTime()||0;
-      const tb = new Date(b.ts||0).getTime()||0;
+      const ta = new Date(T(a.ts) || 0).getTime()||0;
+      const tb = new Date(T(b.ts) || 0).getTime()||0;
       return tb-ta;
     });
 
     const html = sorted.map(r=>{
-      const name=esc(r.name||''), wc=esc(r.wechat||'n/a'), em=esc(r.email||''), ph=esc(r.phone||'');
-      const best=esc(r.best||''), notes=esc(r.notes||''), detail=esc(r.detail||'');
-      const ticket=esc(r.ticket||'');
-      const suspected = (seen.get(`${(r.name||'').trim()}|${(r.wechat||'').trim()}`)>1) || (seen.get(`${(r.name||'').trim()}|${(r.email||'').trim()}`)>1);
-      const ts = r.ts ? new Date(r.ts).toLocaleString() : '';
+      const name   = esc(T(r.name));
+      const wc     = esc(T(r.wechat) || 'n/a');
+      const em     = esc(T(r.email));
+      const ph     = esc(T(r.phone));
+      const best   = esc(T(r.best));
+      const notes  = esc(T(r.notes));
+      const detail = esc(T(r.detail));
+      const ticket = esc(T(r.ticket));
+      const key1   = `${T(r.name)}|${T(r.wechat)}`;
+      const key2   = `${T(r.name)}|${T(r.email)}`;
+      const suspected = (seen.get(key1)>1) || (seen.get(key2)>1);
+      const ts = T(r.ts) ? new Date(T(r.ts)).toLocaleString() : '';
 
-      // 跟进状态
-      const fby   = esc(r.follow_by || '');
-      const fdate = esc(r.follow_date || '');
-      const ftime = esc(r.follow_time || '');
-      const followed = !!(r.follow_by && r.follow_date && r.follow_time);
+      const fby   = esc(T(r.follow_by));
+      const fdate = esc(T(r.follow_date));
+      const ftime = esc(T(r.follow_time));
+      const followed = !!(T(r.follow_by) && T(r.follow_date) && T(r.follow_time));
 
-      // 行内操作：待跟进按钮 / 已跟进标识 / 删除按钮（已跟进隐藏删除）
       const actions = followed
         ? `<span class="pill green">✅ 已跟进 · ${fby} · ${fdate} ${ftime}</span>`
         : `<button class="btn warn" onclick="followUp('${ticket}')">待跟进</button>
@@ -252,7 +260,7 @@ async function loadList(){
 async function confirmDelete(ticket){
   const phrase = prompt('请再次确认是否删除该条记录？\n输入【确认删除】以继续，或点取消退出。');
   if(phrase===null) return;
-  if(phrase.trim()!=='确认删除'){ alert('口令不正确，已取消删除。'); return; }
+  if(T(phrase)!=='确认删除'){ alert('口令不正确，已取消删除。'); return; }
 
   const session = getSession();
   if(!session){ alert('未登录或口令失效，请重新登录。'); logout(); return; }
@@ -280,7 +288,7 @@ async function followUp(ticket){
     `请再次确认是否已对该客户进行跟进？\n跟进人员：${email}\n跟进日期：${nowLocalDate()}\n跟进时间：${nowLocalTime()}\n\n输入【确认已跟进】以继续，或点取消退出。`
   );
   if(okPhrase===null) return;
-  if(okPhrase.trim()!=='确认已跟进'){ alert('口令不正确，已取消操作。'); return; }
+  if(T(okPhrase)!=='确认已跟进'){ alert('口令不正确，已取消操作。'); return; }
 
   try{
     const j = await apiFollow(session, ticket, email, nowLocalDate(), nowLocalTime());
