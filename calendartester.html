@@ -26,6 +26,7 @@
     .chip{display:inline-block;padding:2px 8px;border:1px solid var(--border);border-radius:999px;background:#fff;font-size:12px;color:#374151}
     .title{font-weight:600;margin-right:6px}
     select{padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:#fff}
+    label.switch{display:flex;align-items:center;gap:6px}
   </style>
 </head>
 <body>
@@ -36,23 +37,27 @@
       <button id="signin">使用 Google 登录</button>
       <button id="signout" style="display:none;">退出</button>
       <span id="status" class="help">未登录</span>
-      <select id="calId" title="选择日历（默认 primary）" style="display:none;"></select>
+      <select id="calId" title="选择写入日历（默认 primary）" style="display:none;"></select>
+      <label id="mergeWrap" class="switch help" style="display:none;">
+        <input type="checkbox" id="mergeAll" />
+        合并显示全部
+      </label>
     </div>
   </header>
 
   <div id="calendar"></div>
 
   <div class="footer">
-    <div>时区：<code id="tzLabel">America/Toronto</code>　当前日历：<code id="currCal">primary</code></div>
-    <p class="help">提示：需要在 Google Cloud 的 OAuth 客户端把本地/线上域名加入 Authorized JavaScript origins；共享日历须给你的账号“可更改事件”权限才能写入。</p>
+    <div>时区：<code id="tzLabel">America/Toronto</code>　当前写入日历：<code id="currCal">primary</code></div>
+    <p class="help">提示：需要在 Google Cloud 的 OAuth 客户端把本地/线上域名加入 Authorized JavaScript origins；共享日历须给你的账号“可更改事件”权限才能写入。合并显示开启时，会同时拉取你可见的所有日历（包括只读订阅日历），仅用于查看。</p>
   </div>
 
   <script>
-    // ======= 1) 替换为你的 Google Web Client ID =======
+    // ======= 必填：替换为你的 Google Web Client ID（Web 应用） =======
     // 形如：1234567890-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
     const CLIENT_ID = "126117723960-3gdibqblicp6ncc0jiuv9pu8frgmhs5n.apps.googleusercontent.com";
 
-    // ======= 2) Scope：读取日历列表 + 写事件（最小必要组合）=======
+    // Scope：读取日历列表（含只读）+ 写事件（最小必要组合）
     const SCOPES = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
 
     // 默认主日历；也可改为具体 calendarId（如 xxxx@group.calendar.google.com）
@@ -61,8 +66,9 @@
     // 你的时区
     const TIMEZONE = "America/Toronto";
 
-    // ======= GIS / GAPI 初始化 =======
+    // ======= 状态变量 =======
     let tokenClient, accessToken = null, gapiReady = false, gisReady = false, calendar;
+    let calendarListCache = []; // 你可见的所有日历（含只读）
 
     function gapiLoaded() {
       gapi.load('client', async () => {
@@ -92,7 +98,7 @@
     // ======= 登录 / 退出 =======
     async function signIn() {
       if (!gapiReady || !gisReady) return;
-      tokenClient.requestAccessToken({ prompt: 'consent' }); // 首次弹窗；后续可改为 silent
+      tokenClient.requestAccessToken({ prompt: 'consent' }); // 首次弹窗；后续可 silent
     }
 
     function signOut() {
@@ -103,6 +109,7 @@
         document.getElementById('signout').style.display = 'none';
         document.getElementById('status').textContent = '未登录';
         document.getElementById('calId').style.display = 'none';
+        document.getElementById('mergeWrap').style.display = 'none';
         document.getElementById('currCal').textContent = 'primary';
         if (calendar) calendar.destroy();
       });
@@ -112,21 +119,23 @@
     document.getElementById('signout').onclick = signOut;
     document.getElementById('tzLabel').textContent = TIMEZONE;
 
-    // ======= 登录后：列出“可写”日历并渲染 =======
+    // ======= 登录后：列出所有可见日历；下拉仅列可写；提供“合并显示全部” =======
     async function onSignedIn() {
       document.getElementById('signin').style.display = 'none';
       document.getElementById('signout').style.display = '';
       document.getElementById('status').textContent = '已登录';
 
       const sel = document.getElementById('calId');
+      const mergeWrap = document.getElementById('mergeWrap');
+      const mergeAll = document.getElementById('mergeAll');
+
       sel.innerHTML = '';
       try {
         const res = await gapi.client.calendar.calendarList.list({ maxResults: 250 });
-        // 只显示你有写权限的日历，避免选中不能写的（想看全部可去掉这个 filter）
-        const writable = (res.result.items || []).filter(cal =>
-          cal.accessRole === 'owner' || cal.accessRole === 'writer'
-        );
+        calendarListCache = (res.result.items || []);
 
+        // 只把“可写”的放到下拉，避免选中不能写的日历
+        const writable = calendarListCache.filter(c => c.accessRole === 'owner' || c.accessRole === 'writer');
         for (const cal of writable) {
           const opt = document.createElement('option');
           opt.value = cal.id;
@@ -136,14 +145,22 @@
         const primary = writable.find(c => c.primary);
         sel.value = primary ? primary.id : (writable[0]?.id || 'primary');
         sel.style.display = '';
+        mergeWrap.style.display = '';
 
       } catch (e) {
         const opt = document.createElement('option');
         opt.value = 'primary'; opt.textContent = 'Primary';
-        sel.appendChild(opt); sel.style.display = '';
+        sel.appendChild(opt);
+        sel.style.display = '';
+        mergeWrap.style.display = 'none';
       }
 
+      // 切换目标“写入日历”（重新渲染）
       sel.onchange = () => { if (calendar) { calendar.destroy(); renderCalendar(sel.value); } };
+
+      // 切换合并显示（仅重新拉取事件）
+      mergeAll.onchange = () => { if (calendar) { calendar.refetchEvents(); } };
+
       renderCalendar(sel.value || DEFAULT_CALENDAR_ID);
     }
 
@@ -162,33 +179,58 @@
         slotMaxTime: "23:00:00",
         headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' },
 
-        // 读取当前视图时间窗内的事件
+        // —— 拉事件：支持单本 or 合并所有可见日历 ——
         events: async (info, success, failure) => {
           try {
-            const res = await gapi.client.calendar.events.list({
-              calendarId,
-              timeMin: info.startStr,
-              timeMax: info.endStr,
-              singleEvents: true,
-              orderBy: 'startTime',
-              showDeleted: false,
-              maxResults: 2500,
-            });
-            const items = (res.result.items || []).map(ev => ({
-              id: ev.id,
-              title: ev.summary || '(无标题)',
-              start: ev.start.dateTime || ev.start.date,
-              end: ev.end?.dateTime || ev.end?.date,
-              allDay: !!ev.start.date,
-              extendedProps: { gcal: true }
-            }));
-            success(items);
+            const useMerge = document.getElementById('mergeAll')?.checked;
+
+            // 拉取一本文历的事件，并带上该日历颜色
+            const fetchOne = async (cid) => {
+              const res = await gapi.client.calendar.events.list({
+                calendarId: cid,
+                timeMin: info.startStr,
+                timeMax: info.endStr,
+                singleEvents: true,
+                orderBy: 'startTime',
+                showDeleted: false,
+                maxResults: 2500,
+              });
+              const meta = calendarListCache.find(x => x.id === cid);
+              const color = meta?.backgroundColor;
+
+              return (res.result.items || []).map(ev => ({
+                id: (ev.id || Math.random().toString(36).slice(2)) + "::" + cid, // 合并模式避免跨日历ID冲突
+                title: ev.summary || '(无标题)',
+                start: ev.start.dateTime || ev.start.date,
+                end: ev.end?.dateTime || ev.end?.date,
+                allDay: !!ev.start.date,
+                backgroundColor: color,
+                borderColor: color,
+                extendedProps: {
+                  gcal: true,
+                  calendarId: cid,
+                  originalId: ev.id
+                }
+              }));
+            };
+
+            let merged = [];
+            if (useMerge) {
+              // 合并你可见的全部日历（读写皆可）
+              const allIds = calendarListCache.map(c => c.id);
+              const chunks = await Promise.all(allIds.map(cid => fetchOne(cid)));
+              merged = chunks.flat();
+            } else {
+              merged = await fetchOne(calendarId);
+            }
+
+            success(merged);
           } catch (err) {
             failure(err);
           }
         },
 
-        // 拖选创建事件 → 调用 insert
+        // —— 拖选创建事件：始终写到“当前下拉选中的那本” ——
         select: async (selInfo) => {
           const title = prompt('事件标题：', '新事件');
           if (!title) { calendar.unselect(); return; }
@@ -201,26 +243,35 @@
           try {
             const res = await gapi.client.calendar.events.insert({ calendarId, resource });
             const ev = res.result;
+            // 直接追加到视图（颜色按当前写入日历的颜色）
+            const meta = calendarListCache.find(x => x.id === calendarId);
+            const color = meta?.backgroundColor;
             calendar.addEvent({
-              id: ev.id,
+              id: (ev.id || Math.random().toString(36).slice(2)) + "::" + calendarId,
               title: ev.summary || '(无标题)',
               start: ev.start.dateTime || ev.start.date,
               end: ev.end?.dateTime || ev.end?.date,
               allDay: !!ev.start.date,
-              extendedProps: { gcal: true }
+              backgroundColor: color,
+              borderColor: color,
+              extendedProps: { gcal: true, calendarId, originalId: ev.id }
             });
           } catch (e) {
             alert('创建失败：' + (e.result?.error?.message || e.message));
           }
         },
 
-        // 拖拽/拉伸修改 → 调用 update
+        // —— 拖动/拉伸修改：定位正确的日历与事件 ID 后更新 ——
         eventChange: async (chg) => {
           const e = chg.event;
+          const [origId, cid] = (e.id || "").split("::");
+          const targetCalId = cid || calendarId;   // 合并模式从事件上取；单本模式用当前
+          const targetEventId = origId || e.id;
+
           try {
             await gapi.client.calendar.events.update({
-              calendarId,
-              eventId: e.id,
+              calendarId: targetCalId,
+              eventId: targetEventId,
               resource: {
                 summary: e.title,
                 start: e.allDay ? { date: e.startStr } : { dateTime: e.start.toISOString(), timeZone: TIMEZONE },
@@ -233,11 +284,15 @@
           }
         },
 
-        // 点击删除 → 调用 delete
+        // —— 点击删除：同样拆回日历与事件 ID ——
         eventClick: async (clickInfo) => {
           if (!confirm('删除这个事件？')) return;
+          const [origId, cid] = (clickInfo.event.id || "").split("::");
+          const targetCalId = cid || calendarId;
+          const targetEventId = origId || clickInfo.event.id;
+
           try {
-            await gapi.client.calendar.events.delete({ calendarId, eventId: clickInfo.event.id });
+            await gapi.client.calendar.events.delete({ calendarId: targetCalId, eventId: targetEventId });
             clickInfo.event.remove();
           } catch (err) {
             alert('删除失败：' + (err.result?.error?.message || err.message));
