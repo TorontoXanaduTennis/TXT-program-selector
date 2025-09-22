@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>内部用 · Google Calendar（含只读日历展示）</title>
+  <title>内部用 · Google Calendar（含只读展示、多日历）</title>
 
   <!-- FullCalendar v6 -->
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.min.css" rel="stylesheet">
@@ -54,7 +54,7 @@
   <!-- 选择显示哪些日历（包含只读） -->
   <div id="picker" class="panel" style="display:none;">
     <div class="row">
-      <div class="help">选择要在页面上显示的日历（可多选；只读也可显示）：</div>
+      <div class="help">选择要显示的日历（可多选；只读也可显示）：</div>
       <button id="checkAll" class="help" style="border:1px solid var(--border);background:#fff;border-radius:8px;">全选</button>
       <button id="uncheckAll" class="help" style="border:1px solid var(--border);background:#fff;border-radius:8px;">全不选</button>
       <div class="help">写入目标：<code id="currCal">primary</code></div>
@@ -72,14 +72,14 @@
 
   <div class="footer">
     <div>时区：<code id="tzLabel">America/Toronto</code></div>
-    <p class="help">说明：只读日历会显示，但不可编辑；写入始终落在右上角“写入目标”所选日历。若你对某本日历没有“可更改事件”权限，尝试拖动/删除会被阻止并提示。</p>
+    <p class="help">说明：只读日历会显示但不可编辑；写入只落在右上角“写入目标”所选日历。删除/更新均与 Google Calendar 强一致同步。</p>
   </div>
 
   <script>
-    // 1) 替换为你的 Google Web Client ID（Web 应用）
+    // 替换为你的 Google Web Client ID（Web 应用）
     const CLIENT_ID = "126117723960-3gdibqblicp6ncc0jiuv9pu8frgmhs5n.apps.googleusercontent.com";
 
-    // 2) Scope：读取所有可见日历 + 写事件（最小必要组合）
+    // 读取所有可见日历 + 写事件（最小必要组合）
     const SCOPES = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
 
     const TIMEZONE = "America/Toronto";
@@ -114,7 +114,7 @@
         callback: (resp) => {
           if (resp && resp.access_token) {
             accessToken = resp.access_token;
-            gapi.client.setToken({ access_token: accessToken }); // 关键：把 token 灌进 gapi
+            gapi.client.setToken({ access_token: accessToken }); // 把 token 灌进 gapi
             onSignedIn();
           } else {
             showDiag({ oauth_callback_resp: resp });
@@ -171,7 +171,6 @@
         writeSel.value = writeCalendarId;
         document.getElementById('currCal').textContent = writeCalendarId;
         writeSel.style.display = '';
-
         writeSel.onchange = () => {
           writeCalendarId = writeSel.value;
           document.getElementById('currCal').textContent = writeCalendarId;
@@ -239,11 +238,13 @@
       calendar = new FullCalendar.Calendar(el, {
         initialView: 'timeGridWeek',
         timeZone: TIMEZONE,
+        firstDay: 1,                // 周一为第一天
+        slotMinTime: "08:00:00",    // 早上 8 点开始
+        slotMaxTime: "24:00:00",    // 晚上 12 点结束
+        scrollTime: "08:00:00",     // 打开后滚到 8 点
         selectable: true,
         editable: true,
         nowIndicator: true,
-        slotMinTime: "07:00:00",
-        slotMaxTime: "23:00:00",
         headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' },
 
         // 拉取被“勾选用于显示”的全部日历（含只读）
@@ -269,15 +270,15 @@
               const canEdit = meta && (meta.accessRole === 'owner' || meta.accessRole === 'writer');
 
               return (res.result.items || []).map(ev => ({
-                id: (ev.id || Math.random().toString(36).slice(2)) + "::" + cid,
+                id: ev.id || Math.random().toString(36).slice(2),
                 title: ev.summary || '(无标题)',
                 start: ev.start.dateTime || ev.start.date,
                 end: ev.end?.dateTime || ev.end?.date,
                 allDay: !!ev.start.date,
                 backgroundColor: color,
                 borderColor: color,
-                // 标记是否可编辑（只读则禁拖拽/删除）
-                extendedProps: { calendarId: cid, originalId: ev.id, canEdit }
+                // **关键**：把 calendarId 和 eventId 放在 extendedProps，供更新/删除使用
+                extendedProps: { calendarId: cid, eventId: ev.id, canEdit }
               }));
             };
 
@@ -314,17 +315,17 @@
             const ev = res.result;
             const meta = calendarListCache.find(x => x.id === writeCalendarId);
             const color = meta?.backgroundColor;
-            // 仅当写入目标被勾选用于显示时，才即时添加到视图（否则等下次切换/勾选时才会显示）
+            // 仅当写入目标被勾选用于显示时，才即时添加到视图（否则等下次勾选/刷新）
             if (showCalendarIds.has(writeCalendarId)) {
               calendar.addEvent({
-                id: (ev.id || Math.random().toString(36).slice(2)) + "::" + writeCalendarId,
+                id: ev.id,
                 title: ev.summary || '(无标题)',
                 start: ev.start.dateTime || ev.start.date,
                 end: ev.end?.dateTime || ev.end?.date,
                 allDay: !!ev.start.date,
                 backgroundColor: color,
                 borderColor: color,
-                extendedProps: { calendarId: writeCalendarId, originalId: ev.id, canEdit: true }
+                extendedProps: { calendarId: writeCalendarId, eventId: ev.id, canEdit: true }
               });
             }
           } catch (e) {
@@ -336,13 +337,13 @@
         // 修改事件（只有可编辑事件能走到这里）
         eventChange: async (chg) => {
           const e = chg.event;
-          const [origId, cid] = (e.id || "").split("::");
-          const targetCalId = cid;
-          const targetEventId = origId || e.id;
+          const { calendarId, eventId, canEdit } = e.extendedProps || {};
+          if (!canEdit) { chg.revert(); return; }
+
           try {
             await gapi.client.calendar.events.update({
-              calendarId: targetCalId,
-              eventId: targetEventId,
+              calendarId,
+              eventId,
               resource: {
                 summary: e.title,
                 start: e.allDay ? { date: e.startStr } : { dateTime: e.start.toISOString(), timeZone: TIMEZONE },
@@ -356,17 +357,17 @@
           }
         },
 
-        // 点击删除（只读事件在 eventAllow 已经被拦下）
+        // 点击删除（只读事件在 eventAllow 已拦下）
         eventClick: async (clickInfo) => {
-          const canEdit = clickInfo.event.extendedProps?.canEdit;
+          const { calendarId, eventId, canEdit } = clickInfo.event.extendedProps || {};
           if (!canEdit) { alert('这是只读日历的事件，不能删除。'); return; }
           if (!confirm('删除这个事件？')) return;
-          const [origId, cid] = (clickInfo.event.id || "").split("::");
-          const targetCalId = cid;
-          const targetEventId = origId || clickInfo.event.id;
+
           try {
-            await gapi.client.calendar.events.delete({ calendarId: targetCalId, eventId: targetEventId });
+            await gapi.client.calendar.events.delete({ calendarId, eventId });
+            // 与服务器强一致：删除后强制刷新（避免本地状态与服务器不同步）
             clickInfo.event.remove();
+            calendar.refetchEvents();
           } catch (err) {
             showDiag(err);
             alert('删除失败：' + (err.result?.error?.message || err.message));
