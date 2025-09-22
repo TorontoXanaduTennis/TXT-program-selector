@@ -5,8 +5,34 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>日历 · Google Calendar（含只读展示、多日历）</title>
 
-  <!-- FullCalendar v6 -->
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.min.css" rel="stylesheet">
+  <!-- FullCalendar CSS 多源回退 -->
+  <link id="fc-css" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.min.css" rel="stylesheet" />
+  <script>
+    // 如果首个 CSS 5 秒内没加载到，自动切换备用 CDN
+    (function ensureFullCalendarCSS(){
+      function loaded(sheet){
+        try { return !!sheet.sheet && sheet.sheet.cssRules !== null; } catch(e){ return !!sheet.sheet; }
+      }
+      function swap(){
+        const l=document.getElementById('fc-css');
+        const tried = l.getAttribute('data-tried')||'';
+        if(!tried.includes('jsdelivr')){
+          l.href="https://unpkg.com/fullcalendar@6.1.19/index.min.css";
+          l.setAttribute('data-tried', tried+' jsdelivr');
+          setTimeout(swap, 4000);
+        } else if(!tried.includes('unpkg')){
+          l.href="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.9/index.min.css";
+          l.setAttribute('data-tried', tried+' unpkg');
+        }
+      }
+      setTimeout(function(){
+        const l=document.getElementById('fc-css');
+        if(!loaded(l)) swap();
+      }, 5000);
+    })();
+  </script>
+
+  <!-- FullCalendar v6 JS -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.global.min.js"></script>
 
   <!-- Google Identity Services + Google API JS -->
@@ -36,6 +62,8 @@
     .diag{max-width:1100px;margin:8px auto 0;padding:8px 12px;border:1px dashed var(--border);background:#fff;border-radius:10px;color:#374151}
     .diag b{color:#111}
     .diag pre{white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:12px;color:#6b7280}
+    .stats{max-width:1100px;margin:8px auto 0;padding:6px 12px;font-size:12px;color:#374151}
+    .stats code{background:#fff;border:1px solid var(--border);padding:2px 6px;border-radius:8px;margin-right:6px;display:inline-block}
   </style>
 </head>
 <body>
@@ -63,6 +91,9 @@
   </div>
 
   <div id="calendar"></div>
+
+  <!-- 轻量调试面板：当前视图内每一天的事件数量 -->
+  <div class="stats" id="stats" style="display:none;"></div>
 
   <div class="diag" id="diag" style="display:none;">
     <b>诊断</b>
@@ -106,6 +137,7 @@
       document.getElementById('signin').style.display=''; document.getElementById('signout').style.display='none';
       document.getElementById('refreshBtn').style.display='none'; document.getElementById('status').textContent='未登录';
       document.getElementById('writeCal').style.display='none'; document.getElementById('picker').style.display='none';
+      document.getElementById('stats').style.display='none';
       if(calendar) calendar.destroy();
     });}
     document.getElementById('signin').onclick=signIn;
@@ -165,7 +197,7 @@
         timeZone:TIMEZONE,
         firstDay:1,
         slotMinTime:"08:00:00",
-        slotMaxTime:"23:59:59",      // 避免 24:00 边界问题
+        slotMaxTime:"23:59:59",
         scrollTime:"08:00:00",
         slotLabelFormat:{hour:'2-digit',minute:'2-digit',hour12:false}, // 24h
         selectable:true,
@@ -191,7 +223,7 @@
               const canEdit=meta && (meta.accessRole==='owner'||meta.accessRole==='writer');
 
               return (res.result.items||[]).map(ev=>({
-                id:(ev.id||Math.random().toString(36).slice(2))+'::'+cid, // 避免跨日历冲突
+                id:(ev.id||Math.random().toString(36).slice(2))+'::'+cid, // 防跨日历冲突
                 title:ev.summary||'(无标题)',
                 start:ev.start.dateTime||ev.start.date,
                 end:ev.end?.dateTime||ev.end?.date,
@@ -204,14 +236,30 @@
             const chunks=await Promise.all(ids.map(cid=>fetchOne(cid)));
             const events=chunks.flat();
 
-            // —— 再次在前端按视窗精确裁剪（确保只显示本周范围）——
+            // —— 在前端按视窗精确裁剪 + 输出统计 —— 
             const viewStart=info.start.getTime(), viewEnd=info.end.getTime();
             const filtered=events.filter(ev=>{
               const s=new Date(ev.start).getTime();
               const e=ev.end ? new Date(ev.end).getTime() : s;
-              // 与视窗相交即可（end 视为排他）
               return e>viewStart && s<viewEnd;
             });
+
+            // 调试统计：显示一周七天的数量（Sun=0 ... Sat=6）
+            const buckets=[0,0,0,0,0,0,0];
+            filtered.forEach(ev=>{
+              const d=new Date(ev.start); buckets[d.getDay()]++;
+            });
+            const stats=document.getElementById('stats');
+            stats.style.display='';
+            stats.innerHTML = `
+              <code>Sun:${buckets[0]}</code>
+              <code>Mon:${buckets[1]}</code>
+              <code>Tue:${buckets[2]}</code>
+              <code>Wed:${buckets[3]}</code>
+              <code>Thu:${buckets[4]}</code>
+              <code>Fri:${buckets[5]}</code>
+              <code>Sat:${buckets[6]}</code>
+            `;
 
             success(filtered);
           }catch(err){ showDiag(err); failure(err); }
