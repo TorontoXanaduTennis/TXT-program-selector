@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>内部用 · Google Calendar（含只读展示、多日历）</title>
+  <title>日历 · Google Calendar（含只读展示、多日历）</title>
 
   <!-- FullCalendar v6 -->
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.min.css" rel="stylesheet">
@@ -23,7 +23,6 @@
     .right{margin-left:auto;display:flex;gap:8px;align-items:center}
     .help{font-size:12px;color:var(--muted)}
     .footer{max-width:1100px;margin:16px auto;padding:0 12px 24px;color:var(--muted);font-size:12px}
-    .chip{display:inline-block;padding:2px 8px;border:1px solid var(--border);border-radius:999px;background:#fff;font-size:12px;color:#374151}
     .title{font-weight:600;margin-right:6px}
     select{padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:#fff}
     .panel{max-width:1100px;margin:10px auto 0;padding:8px 12px;border:1px solid var(--border);background:#fff;border-radius:10px}
@@ -41,13 +40,13 @@
 </head>
 <body>
   <header>
-    <span class="title">内部日历</span>
-    <span class="chip">纯前端 · GitHub Pages</span>
+    <span class="title">日历</span>
     <div class="right">
       <button id="signin">使用 Google 登录</button>
       <button id="signout" style="display:none;">退出</button>
+      <button id="refreshBtn" style="display:none;">刷新</button>
       <span id="status" class="help">未登录</span>
-      <select id="writeCal" title="写入目标（只列可写）" style="display:none;"></select>
+      <!-- 写入目标选择器已移至下方“全选/全不选”右边 -->
     </div>
   </header>
 
@@ -57,6 +56,8 @@
       <div class="help">选择要显示的日历（可多选；只读也可显示）：</div>
       <button id="checkAll" class="help" style="border:1px solid var(--border);background:#fff;border-radius:8px;">全选</button>
       <button id="uncheckAll" class="help" style="border:1px solid var(--border);background:#fff;border-radius:8px;">全不选</button>
+      <!-- ② 写入目标下拉从顶部移动到这里（在全选/全不选右边） -->
+      <select id="writeCal" title="写入目标（只列可写）" style="display:none;"></select>
       <div class="help">写入目标：<code id="currCal">primary</code></div>
     </div>
     <div id="calList" class="list"></div>
@@ -72,7 +73,7 @@
 
   <div class="footer">
     <div>时区：<code id="tzLabel">America/Toronto</code></div>
-    <p class="help">说明：只读日历会显示但不可编辑；写入只落在右上角“写入目标”所选日历。删除/更新均与 Google Calendar 强一致同步。</p>
+    <p class="help">说明：只读日历会显示但不可编辑；写入只落在“写入目标”所选日历。删除/更新均与 Google Calendar 强一致同步。</p>
   </div>
 
   <script>
@@ -136,6 +137,7 @@
         gapi.client.setToken(null);
         document.getElementById('signin').style.display = '';
         document.getElementById('signout').style.display = 'none';
+        document.getElementById('refreshBtn').style.display = 'none';
         document.getElementById('status').textContent = '未登录';
         document.getElementById('writeCal').style.display = 'none';
         document.getElementById('picker').style.display = 'none';
@@ -144,12 +146,14 @@
     }
     document.getElementById('signin').onclick = signIn;
     document.getElementById('signout').onclick = signOut;
+    document.getElementById('refreshBtn').onclick = () => { if (calendar) calendar.refetchEvents(); };
     document.getElementById('tzLabel').textContent = TIMEZONE;
 
     // —— 登录后：拉日历列表，构建“写入目标 + 多选显示清单” ——
     async function onSignedIn() {
       document.getElementById('signin').style.display = 'none';
       document.getElementById('signout').style.display = '';
+      document.getElementById('refreshBtn').style.display = '';
       document.getElementById('status').textContent = '已登录';
 
       try {
@@ -241,7 +245,12 @@
         firstDay: 1,                // 周一为第一天
         slotMinTime: "08:00:00",    // 早上 8 点开始
         slotMaxTime: "24:00:00",    // 晚上 12 点结束
-        scrollTime: "08:00:00",     // 打开后滚到 8 点
+        scrollTime: "08:00:00",
+        slotLabelFormat: {          // ③ 左侧时间轴用 24 小时制
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        },
         selectable: true,
         editable: true,
         nowIndicator: true,
@@ -277,7 +286,6 @@
                 allDay: !!ev.start.date,
                 backgroundColor: color,
                 borderColor: color,
-                // **关键**：把 calendarId 和 eventId 放在 extendedProps，供更新/删除使用
                 extendedProps: { calendarId: cid, eventId: ev.id, canEdit }
               }));
             };
@@ -315,7 +323,6 @@
             const ev = res.result;
             const meta = calendarListCache.find(x => x.id === writeCalendarId);
             const color = meta?.backgroundColor;
-            // 仅当写入目标被勾选用于显示时，才即时添加到视图（否则等下次勾选/刷新）
             if (showCalendarIds.has(writeCalendarId)) {
               calendar.addEvent({
                 id: ev.id,
@@ -365,7 +372,6 @@
 
           try {
             await gapi.client.calendar.events.delete({ calendarId, eventId });
-            // 与服务器强一致：删除后强制刷新（避免本地状态与服务器不同步）
             clickInfo.event.remove();
             calendar.refetchEvents();
           } catch (err) {
