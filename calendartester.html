@@ -5,34 +5,28 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>日历 · Google Calendar（含只读展示、多日历）</title>
 
-  <!-- FullCalendar CSS 多源回退 -->
+  <!-- FullCalendar CSS（带失败回退） -->
   <link id="fc-css" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.min.css" rel="stylesheet" />
   <script>
-    // 如果首个 CSS 5 秒内没加载到，自动切换备用 CDN
     (function ensureFullCalendarCSS(){
-      function loaded(sheet){
-        try { return !!sheet.sheet && sheet.sheet.cssRules !== null; } catch(e){ return !!sheet.sheet; }
-      }
+      function loaded(l){ try{ return !!l.sheet && l.sheet.cssRules!==null; }catch(e){ return !!l.sheet; } }
       function swap(){
         const l=document.getElementById('fc-css');
-        const tried = l.getAttribute('data-tried')||'';
+        const tried=l.getAttribute('data-tried')||'';
         if(!tried.includes('jsdelivr')){
           l.href="https://unpkg.com/fullcalendar@6.1.19/index.min.css";
           l.setAttribute('data-tried', tried+' jsdelivr');
           setTimeout(swap, 4000);
-        } else if(!tried.includes('unpkg')){
+        }else if(!tried.includes('unpkg')){
           l.href="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.9/index.min.css";
           l.setAttribute('data-tried', tried+' unpkg');
         }
       }
-      setTimeout(function(){
-        const l=document.getElementById('fc-css');
-        if(!loaded(l)) swap();
-      }, 5000);
+      setTimeout(()=>{ const l=document.getElementById('fc-css'); if(!loaded(l)) swap(); }, 5000);
     })();
   </script>
 
-  <!-- FullCalendar v6 JS -->
+  <!-- FullCalendar v6 -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.global.min.js"></script>
 
   <!-- Google Identity Services + Google API JS -->
@@ -62,8 +56,6 @@
     .diag{max-width:1100px;margin:8px auto 0;padding:8px 12px;border:1px dashed var(--border);background:#fff;border-radius:10px;color:#374151}
     .diag b{color:#111}
     .diag pre{white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:12px;color:#6b7280}
-    .stats{max-width:1100px;margin:8px auto 0;padding:6px 12px;font-size:12px;color:#374151}
-    .stats code{background:#fff;border:1px solid var(--border);padding:2px 6px;border-radius:8px;margin-right:6px;display:inline-block}
   </style>
 </head>
 <body>
@@ -92,9 +84,6 @@
 
   <div id="calendar"></div>
 
-  <!-- 轻量调试面板：当前视图内每一天的事件数量 -->
-  <div class="stats" id="stats" style="display:none;"></div>
-
   <div class="diag" id="diag" style="display:none;">
     <b>诊断</b>
     <pre id="diagText"></pre>
@@ -108,17 +97,15 @@
   <script>
     // 你的 Web Client ID
     const CLIENT_ID = "126117723960-3gdibqblicp6ncc0jiuv9pu8frgmhs5n.apps.googleusercontent.com";
-    // 最小必要 Scope
+    // Scope（读取所有可见 + 写事件）
     const SCOPES = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
-    // 展示用时区
+    // 展示时区
     const TIMEZONE = "America/Toronto";
-    // 抓取窗口缓冲（毫秒）：前后各 +36 小时，覆盖 DST/跨日边界
+    // 抓取窗口缓冲：前后各 +36 小时，覆盖周末/DST 边界
     const FETCH_BUFFER_MS = 36 * 60 * 60 * 1000;
 
     let tokenClient, accessToken=null, gapiReady=false, gisReady=false, calendar;
-    let calendarListCache=[];          // 可见日历（含只读）
-    let showCalendarIds=new Set();     // 勾选显示的日历
-    let writeCalendarId="primary";     // 写入目标
+    let calendarListCache=[], showCalendarIds=new Set(), writeCalendarId="primary";
 
     function showDiag(obj){const b=document.getElementById('diag');const p=document.getElementById('diagText');b.style.display='';try{p.textContent=(typeof obj==='string')?obj:JSON.stringify(obj,null,2);}catch(e){p.textContent=String(obj);} }
 
@@ -137,7 +124,6 @@
       document.getElementById('signin').style.display=''; document.getElementById('signout').style.display='none';
       document.getElementById('refreshBtn').style.display='none'; document.getElementById('status').textContent='未登录';
       document.getElementById('writeCal').style.display='none'; document.getElementById('picker').style.display='none';
-      document.getElementById('stats').style.display='none';
       if(calendar) calendar.destroy();
     });}
     document.getElementById('signin').onclick=signIn;
@@ -197,17 +183,18 @@
         timeZone:TIMEZONE,
         firstDay:1,
         slotMinTime:"08:00:00",
-        slotMaxTime:"23:59:59",
+        slotMaxTime:"23:59:59",     // 避免 24:00 边界
         scrollTime:"08:00:00",
-        slotLabelFormat:{hour:'2-digit',minute:'2-digit',hour12:false}, // 24h
+        slotLabelFormat:{hour:'2-digit',minute:'2-digit',hour12:false}, // 24h 刻度
         selectable:true,
         editable:true,
         nowIndicator:true,
+        eventMaxStack: 50,          // 允许同一时段堆很多条，不折叠
         headerToolbar:{ left:'prev,next today', center:'title', right:'dayGridMonth,timeGridWeek,timeGridDay' },
 
         events: async (info, success, failure)=>{
           try{
-            // —— 加缓冲窗口，覆盖周日深夜/跨日/DST —— 
+            // 直接给 FullCalendar “大窗口”数据，不再做本地时区裁剪
             const timeMinISO=new Date(info.start.getTime()-FETCH_BUFFER_MS).toISOString();
             const timeMaxISO=new Date(info.end.getTime()+FETCH_BUFFER_MS).toISOString();
             const ids=(showCalendarIds.size?Array.from(showCalendarIds):[writeCalendarId]);
@@ -223,7 +210,8 @@
               const canEdit=meta && (meta.accessRole==='owner'||meta.accessRole==='writer');
 
               return (res.result.items||[]).map(ev=>({
-                id:(ev.id||Math.random().toString(36).slice(2))+'::'+cid, // 防跨日历冲突
+                // 用 eventId::calendarId 彻底避免跨日历冲突
+                id:(ev.id||Math.random().toString(36).slice(2))+'::'+cid,
                 title:ev.summary||'(无标题)',
                 start:ev.start.dateTime||ev.start.date,
                 end:ev.end?.dateTime||ev.end?.date,
@@ -234,34 +222,7 @@
             };
 
             const chunks=await Promise.all(ids.map(cid=>fetchOne(cid)));
-            const events=chunks.flat();
-
-            // —— 在前端按视窗精确裁剪 + 输出统计 —— 
-            const viewStart=info.start.getTime(), viewEnd=info.end.getTime();
-            const filtered=events.filter(ev=>{
-              const s=new Date(ev.start).getTime();
-              const e=ev.end ? new Date(ev.end).getTime() : s;
-              return e>viewStart && s<viewEnd;
-            });
-
-            // 调试统计：显示一周七天的数量（Sun=0 ... Sat=6）
-            const buckets=[0,0,0,0,0,0,0];
-            filtered.forEach(ev=>{
-              const d=new Date(ev.start); buckets[d.getDay()]++;
-            });
-            const stats=document.getElementById('stats');
-            stats.style.display='';
-            stats.innerHTML = `
-              <code>Sun:${buckets[0]}</code>
-              <code>Mon:${buckets[1]}</code>
-              <code>Tue:${buckets[2]}</code>
-              <code>Wed:${buckets[3]}</code>
-              <code>Thu:${buckets[4]}</code>
-              <code>Fri:${buckets[5]}</code>
-              <code>Sat:${buckets[6]}</code>
-            `;
-
-            success(filtered);
+            success(chunks.flat()); // 交给 FullCalendar 自己过滤当前视窗
           }catch(err){ showDiag(err); failure(err); }
         },
 
